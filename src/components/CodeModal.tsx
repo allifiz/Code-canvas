@@ -7,12 +7,16 @@ type CodeFormat = 'react' | 'html'
 export function CodeModal({ onClose }: { onClose: () => void }) {
   const nodes = useEditorStore((state) => state.nodes)
   const rootIds = useEditorStore((state) => state.rootIds)
+  const projectComponents = useEditorStore((state) => state.projectComponents)
   const [format, setFormat] = useState<CodeFormat>('react')
   const [copied, setCopied] = useState(false)
 
   const code = useMemo(
-    () => format === 'react' ? generateReactCode(nodes, rootIds) : generateHtmlCode(nodes, rootIds),
-    [format, nodes, rootIds],
+    () =>
+      format === 'react'
+        ? generateReactCode(nodes, rootIds, projectComponents)
+        : generateHtmlCode(nodes, rootIds, projectComponents),
+    [format, nodes, projectComponents, rootIds],
   )
 
   const copy = async () => {
