@@ -120,3 +120,8 @@ button { color: inherit; }
   white-space: nowrap;
   border: 0;
 }
+
+.code-header-actions { display: flex; align-items: center; gap: 10px; }
+.code-format-switcher { display: flex; padding: 3px; border: 1px solid #292b33; border-radius: 8px; background: #0d0e12; }
+.code-format-switcher button { border: 0; border-radius: 5px; padding: 5px 9px; background: transparent; color: #6f7481; cursor: pointer; font-size: 10px; }
+.code-format-switcher button.active { background: #262932; color: #f4f5f7; }
