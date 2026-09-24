@@ -138,7 +138,27 @@ function makeNode(type: NodeType, component?: ProjectComponentDefinition): Canva
     },
   }
 
-  return { id, type, props: defaults[type], children: [] }
+  const defaultNames: Record<NodeType, string> = {
+    container: 'Frame',
+    text: 'Text',
+    button: 'Button',
+    input: 'Input',
+    textarea: 'Textarea',
+    link: 'Link',
+    divider: 'Divider',
+    image: 'Image',
+    component: component?.name ?? 'Component',
+  }
+
+  return {
+    id,
+    type,
+    name: defaultNames[type],
+    visible: true,
+    locked: false,
+    props: defaults[type],
+    children: [],
+  }
 }
 
 function createDemoDocument(): CanvasDocument {
@@ -501,6 +521,9 @@ interface EditorState extends CanvasDocument {
   duplicateNode: (nodeId: string) => void
   copyStyle: (nodeId: string) => void
   pasteStyle: (nodeId: string) => void
+  renameNode: (nodeId: string, name: string) => void
+  toggleNodeVisibility: (nodeId: string) => void
+  toggleNodeLock: (nodeId: string) => void
   selectNode: (nodeId: string | null) => void
   setViewport: (viewport: Viewport) => void
   setZoom: (zoom: number) => void
@@ -815,6 +838,43 @@ export const useEditorStore = create<EditorState>()(
               },
             },
             ...pushHistory(state),
+          }
+        }),
+
+      renameNode: (nodeId, name) =>
+        set((state) => {
+          const node = state.nodes[nodeId]
+          if (!node) return state
+          return {
+            nodes: {
+              ...state.nodes,
+              [nodeId]: { ...node, name: name.trim() || node.name },
+            },
+          }
+        }),
+
+      toggleNodeVisibility: (nodeId) =>
+        set((state) => {
+          const node = state.nodes[nodeId]
+          if (!node) return state
+          return {
+            nodes: {
+              ...state.nodes,
+              [nodeId]: { ...node, visible: node.visible === false ? true : false },
+            },
+            selectedId: state.selectedId === nodeId && node.visible !== false ? null : state.selectedId,
+          }
+        }),
+
+      toggleNodeLock: (nodeId) =>
+        set((state) => {
+          const node = state.nodes[nodeId]
+          if (!node) return state
+          return {
+            nodes: {
+              ...state.nodes,
+              [nodeId]: { ...node, locked: !node.locked },
+            },
           }
         }),
 
