@@ -170,11 +170,14 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
   const nodes = useEditorStore((state) => state.nodes)
   const rootIds = useEditorStore((state) => state.rootIds)
   const selectedId = useEditorStore((state) => state.selectedId)
+  const selectedIds = useEditorStore((state) => state.selectedIds)
   const projectComponents = useEditorStore((state) => state.projectComponents)
   const addNode = useEditorStore((state) => state.addNode)
   const addPreset = useEditorStore((state) => state.addPreset)
   const duplicateNode = useEditorStore((state) => state.duplicateNode)
-  const deleteNode = useEditorStore((state) => state.deleteNode)
+  const deleteSelected = useEditorStore((state) => state.deleteSelected)
+  const groupSelected = useEditorStore((state) => state.groupSelected)
+  const ungroupSelected = useEditorStore((state) => state.ungroupSelected)
   const copyStyle = useEditorStore((state) => state.copyStyle)
   const pasteStyle = useEditorStore((state) => state.pasteStyle)
   const copiedStyle = useEditorStore((state) => state.copiedStyle)
@@ -272,10 +275,13 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
             <MenuItem disabled={!canRedo} shortcut="⇧⌘Z" onClick={redo}>Redo</MenuItem>
             <div className="app-menu-separator" />
             <MenuItem disabled={!selectedId} shortcut="⌘D" onClick={() => selectedId && duplicateNode(selectedId)}>Duplicate</MenuItem>
+            <MenuItem disabled={selectedIds.length < 2} shortcut="⌘G" onClick={groupSelected}>Group selection</MenuItem>
+            <MenuItem disabled={!selectedId || selectedIds.length !== 1} shortcut="⇧⌘G" onClick={ungroupSelected}>Ungroup</MenuItem>
+            <div className="app-menu-separator" />
             <MenuItem disabled={!selectedId} shortcut="⌥⌘C" onClick={() => selectedId && copyStyle(selectedId)}>Copy style</MenuItem>
             <MenuItem disabled={!selectedId || !copiedStyle} shortcut="⌥⌘V" onClick={() => selectedId && pasteStyle(selectedId)}>Paste style</MenuItem>
             <div className="app-menu-separator" />
-            <MenuItem disabled={!selectedId} shortcut="⌫" onClick={() => selectedId && deleteNode(selectedId)}>Delete</MenuItem>
+            <MenuItem disabled={!selectedIds.length} shortcut="⌫" onClick={deleteSelected}>Delete selection</MenuItem>
           </Menu>
 
           <Menu label="Insert">
