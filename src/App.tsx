@@ -60,13 +60,17 @@ export default function App() {
 
     const source = active.data.current
     const targetParent = (over.data.current?.parentId as string | null | undefined) ?? null
+    const targetIndex =
+      typeof over.data.current?.index === 'number'
+        ? (over.data.current.index as number)
+        : undefined
 
     if (source?.source === 'palette') {
-      addNode(source.type as NodeType, targetParent)
+      addNode(source.type as NodeType, targetParent, targetIndex)
     }
 
     if (source?.source === 'canvas') {
-      moveNode(source.nodeId as string, targetParent)
+      moveNode(source.nodeId as string, targetParent, targetIndex)
     }
   }
 
