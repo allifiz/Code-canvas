@@ -88,14 +88,49 @@ const textLike = new Set(['text', 'button', 'input', 'textarea', 'link'])
 export function PropertiesPanel() {
   const [tab, setTab] = useState<'design' | 'inspect'>('design')
   const selectedId = useEditorStore((state) => state.selectedId)
+  const selectedIds = useEditorStore((state) => state.selectedIds)
   const node = useEditorStore((state) => (state.selectedId ? state.nodes[state.selectedId] : undefined))
   const updateNode = useEditorStore((state) => state.updateNode)
   const deleteNode = useEditorStore((state) => state.deleteNode)
+  const deleteSelected = useEditorStore((state) => state.deleteSelected)
   const duplicateNode = useEditorStore((state) => state.duplicateNode)
+  const groupSelected = useEditorStore((state) => state.groupSelected)
+  const ungroupSelected = useEditorStore((state) => state.ungroupSelected)
   const copyStyle = useEditorStore((state) => state.copyStyle)
   const pasteStyle = useEditorStore((state) => state.pasteStyle)
   const copiedStyle = useEditorStore((state) => state.copiedStyle)
   const projectComponents = useEditorStore((state) => state.projectComponents)
+
+  if (selectedIds.length > 1) {
+    return (
+      <aside className="properties panel">
+        <div className="inspector-tabs">
+          <button className="active">Design</button>
+          <button disabled>Inspect</button>
+        </div>
+
+        <div className="multi-selection-panel">
+          <div className="multi-selection-icon">◇◇</div>
+          <strong>{selectedIds.length} layers selected</strong>
+          <p>Group them, move them together with the arrow keys, or delete them as one selection.</p>
+
+          <div className="multi-selection-actions">
+            <button className="primary-button" onClick={groupSelected}>Group selection</button>
+            <button className="ghost-button" onClick={deleteSelected}>Delete selection</button>
+          </div>
+
+          <div className="multi-selection-list">
+            {selectedIds.map((id) => (
+              <div key={id}>
+                <span>{useEditorStore.getState().nodes[id]?.name ?? useEditorStore.getState().nodes[id]?.type ?? 'Layer'}</span>
+                <code>{id.slice(0, 8)}</code>
+              </div>
+            ))}
+          </div>
+        </div>
+      </aside>
+    )
+  }
 
   if (!node || !selectedId) {
     return (
@@ -448,6 +483,11 @@ export function PropertiesPanel() {
               <button onClick={() => copyStyle(selectedId)}>Copy style</button>
               <button disabled={!copiedStyle} onClick={() => pasteStyle(selectedId)}>Paste style</button>
               <button onClick={() => duplicateNode(selectedId)}>Duplicate</button>
+              {node.type === 'container' && node.children.length > 0 ? (
+                <button onClick={ungroupSelected}>Ungroup</button>
+              ) : (
+                <button disabled>Ungroup</button>
+              )}
               <button className="danger-inline" onClick={() => deleteNode(selectedId)}>Delete</button>
             </div>
           </Section>
