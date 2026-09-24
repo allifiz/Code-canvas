@@ -6,6 +6,10 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
   const setViewport = useEditorStore((state) => state.setViewport)
   const loadDemo = useEditorStore((state) => state.loadDemo)
   const clearCanvas = useEditorStore((state) => state.clearCanvas)
+  const undo = useEditorStore((state) => state.undo)
+  const redo = useEditorStore((state) => state.redo)
+  const canUndo = useEditorStore((state) => state.past.length > 0)
+  const canRedo = useEditorStore((state) => state.future.length > 0)
 
   const presets: Array<{ value: Viewport; label: string }> = [
     { value: 'desktop', label: 'Desktop' },
@@ -34,6 +38,8 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
       </div>
 
       <div className="topbar-actions">
+        <button className="ghost-button" onClick={undo} disabled={!canUndo} title="Undo (Ctrl/Cmd+Z)">↶</button>
+        <button className="ghost-button" onClick={redo} disabled={!canRedo} title="Redo (Ctrl/Cmd+Shift+Z)">↷</button>
         <button className="ghost-button" onClick={loadDemo}>Demo</button>
         <button className="ghost-button" onClick={clearCanvas}>Clear</button>
         <button className="primary-button" onClick={onOpenCode}>&lt;/&gt; Code</button>
