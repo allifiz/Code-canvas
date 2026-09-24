@@ -40,11 +40,6 @@ function nodeStyle(node: CanvasNode, preview?: SizePreview | null): CSSPropertie
     paddingBottom: p.paddingBottom ?? p.padding,
     paddingLeft: p.paddingLeft ?? p.padding,
 
-    marginTop: p.marginTop,
-    marginRight: p.marginRight,
-    marginBottom: p.marginBottom,
-    marginLeft: p.marginLeft,
-
     background: p.background,
     color: p.color,
     opacity: p.opacity,
@@ -303,9 +298,20 @@ function CanvasItem({ id }: { id: string }) {
     window.addEventListener('pointerup', end, { once: true })
   }
 
-  const transformStyle: CSSProperties | undefined = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
-    : undefined
+  const visualWidth = previewSize?.width ?? node.props.width
+  const visualHeight = previewSize?.height ?? node.props.height
+  const intrinsicWidth = node.type === 'text' || node.type === 'button' || node.type === 'link'
+
+  const transformStyle: CSSProperties = {
+    width: visualWidth === 'auto' || (!visualWidth && intrinsicWidth) ? 'fit-content' : visualWidth,
+    height: visualHeight === 'auto' ? undefined : visualHeight,
+    maxWidth: '100%',
+    marginTop: node.props.marginTop,
+    marginRight: node.props.marginRight,
+    marginBottom: node.props.marginBottom,
+    marginLeft: node.props.marginLeft,
+    ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}),
+  }
 
   const content = (() => {
     switch (node.type) {
