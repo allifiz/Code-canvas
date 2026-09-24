@@ -558,6 +558,7 @@ function CanvasItem({ id }: { id: string }) {
       className={`canvas-node ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''} ${node.locked ? 'locked' : ''} ${editingText ? 'editing-text' : ''}`}
       style={transformStyle}
       data-canvas-node-id={id}
+      data-canvas-node-locked={node.locked ? 'true' : 'false'}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       {...listeners}
@@ -600,9 +601,13 @@ export function Canvas() {
   const zoom = useEditorStore((state) => state.zoom)
   const showGrid = useEditorStore((state) => state.showGrid)
   const selectNode = useEditorStore((state) => state.selectNode)
+  const selectedIds = useEditorStore((state) => state.selectedIds)
+  const setSelection = useEditorStore((state) => state.setSelection)
   const [spaceDown, setSpaceDown] = useState(false)
   const [panning, setPanning] = useState(false)
+  const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const suppressCanvasClickRef = useRef(false)
 
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
@@ -658,6 +663,76 @@ export function Canvas() {
     window.addEventListener('pointerup', end, { once: true })
   }
 
+  const startMarquee = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (spaceDown || event.button !== 0) return
+
+    const target = event.target as HTMLElement
+    if (target.closest('[data-canvas-node-id], .resize-handle')) return
+
+    event.preventDefault()
+    const startX = event.clientX
+    const startY = event.clientY
+    const additive = event.shiftKey
+    const initialSelection = additive ? [...selectedIds] : []
+    let dragged = false
+
+    setMarquee({ left: startX, top: startY, width: 0, height: 0 })
+
+    const move = (pointerEvent: PointerEvent) => {
+      const left = Math.min(startX, pointerEvent.clientX)
+      const top = Math.min(startY, pointerEvent.clientY)
+      const width = Math.abs(pointerEvent.clientX - startX)
+      const height = Math.abs(pointerEvent.clientY - startY)
+      if (width > 3 || height > 3) dragged = true
+      setMarquee({ left, top, width, height })
+    }
+
+    const end = (pointerEvent: PointerEvent) => {
+      window.removeEventListener('pointermove', move)
+
+      const left = Math.min(startX, pointerEvent.clientX)
+      const right = Math.max(startX, pointerEvent.clientX)
+      const top = Math.min(startY, pointerEvent.clientY)
+      const bottom = Math.max(startY, pointerEvent.clientY)
+
+      if (dragged) {
+        const candidates = Array.from(
+          document.querySelectorAll<HTMLElement>('[data-canvas-node-id]'),
+        ).filter((element) => {
+          if (element.dataset.canvasNodeLocked === 'true') return false
+          const rect = element.getBoundingClientRect()
+          const centerX = rect.left + rect.width / 2
+          const centerY = rect.top + rect.height / 2
+          return centerX >= left && centerX <= right && centerY >= top && centerY <= bottom
+        })
+
+        const deepest = candidates.filter(
+          (element) =>
+            !candidates.some(
+              (other) => other !== element && element.contains(other),
+            ),
+        )
+
+        const ids = deepest
+          .map((element) => element.dataset.canvasNodeId)
+          .filter((id): id is string => !!id)
+
+        setSelection([...new Set([...initialSelection, ...ids])])
+        suppressCanvasClickRef.current = true
+        window.setTimeout(() => {
+          suppressCanvasClickRef.current = false
+        }, 0)
+      } else if (!additive) {
+        setSelection([])
+      }
+
+      setMarquee(null)
+    }
+
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end, { once: true })
+  }
+
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas-root',
     data: { parentId: null },
@@ -666,14 +741,24 @@ export function Canvas() {
   return (
     <main
       className={`workspace ${showGrid ? '' : 'grid-hidden'} ${spaceDown ? 'pan-ready' : ''} ${panning ? 'panning' : ''}`}
-      onClick={() => selectNode(null)}
+      onClick={() => {
+        if (suppressCanvasClickRef.current) return
+        selectNode(null)
+      }}
     >
       <div className="viewport-label">
         <span>{viewport}</span>
         <code>{viewportWidths[viewport]} px · {Math.round(zoom * 100)}%</code>
       </div>
 
-      <div ref={scrollRef} className="canvas-scroll" onPointerDown={startPan}>
+      <div
+        ref={scrollRef}
+        className="canvas-scroll"
+        onPointerDown={(event) => {
+          startPan(event)
+          startMarquee(event)
+        }}
+      >
         <div className="canvas-zoom-stage" style={{ width: viewportWidths[viewport], transform: `scale(${zoom})` }}>
           <div
             ref={setNodeRef}
@@ -700,6 +785,19 @@ export function Canvas() {
           </div>
         </div>
       </div>
+
+      {marquee && (
+        <div
+          className="selection-marquee"
+          style={{
+            left: marquee.left,
+            top: marquee.top,
+            width: marquee.width,
+            height: marquee.height,
+          }}
+          aria-hidden="true"
+        />
+      )}
     </main>
   )
 }
