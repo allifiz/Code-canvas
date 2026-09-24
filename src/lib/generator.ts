@@ -55,7 +55,6 @@ function classes(props: NodeProps, type: CanvasNode['type']) {
 }
 
 function renderComponentProp(key: string, value: ComponentPropValue) {
-  if (typeof value === 'string') return `${key}="${quote(value)}"`
   return `${key}={${JSON.stringify(value)}}`
 }
 
