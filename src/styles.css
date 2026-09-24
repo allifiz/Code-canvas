@@ -584,3 +584,25 @@ body.is-resizing * {
   text-align: left;
 }
 .multi-selection-list code { color: #555b68; font-size: 8px; }
+
+
+/* alignment snapping */
+.alignment-guide {
+  position: absolute;
+  z-index: 18;
+  pointer-events: none;
+  background: #b36cff;
+  box-shadow: 0 0 0 1px #7c3aed22;
+}
+.alignment-guide-vertical {
+  top: -100vh;
+  bottom: -100vh;
+  right: -1px;
+  width: 1px;
+}
+.alignment-guide-horizontal {
+  left: -100vw;
+  right: -100vw;
+  bottom: -1px;
+  height: 1px;
+}
