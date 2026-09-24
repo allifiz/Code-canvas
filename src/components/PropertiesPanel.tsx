@@ -327,6 +327,17 @@ export function PropertiesPanel() {
             </Section>
           )}
 
+          <Section title="Position">
+            <div className="field-grid">
+              <Field label="X">
+                <NumberInput value={node.props.translateX ?? 0} onChange={(translateX) => update({ translateX })} />
+              </Field>
+              <Field label="Y">
+                <NumberInput value={node.props.translateY ?? 0} onChange={(translateY) => update({ translateY })} />
+              </Field>
+            </div>
+          </Section>
+
           <Section title="Size">
             <div className="field-grid">
               <Field label="W"><input value={node.props.width ?? 'auto'} onChange={(event) => update({ width: event.target.value })} /></Field>
