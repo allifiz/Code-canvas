@@ -164,7 +164,7 @@ const main = async () => {
     return
   }
 
-  const files = await walk(scanDir)
+  const files = (await walk(scanDir)).sort((a, b) => a.localeCompare(b))
   const discovered = []
 
   for (const filePath of files) {
@@ -180,6 +180,12 @@ const main = async () => {
     }
   }
 
+  discovered.sort((a, b) =>
+    a.importPath.localeCompare(b.importPath) ||
+    (a.exportName ?? '').localeCompare(b.exportName ?? '') ||
+    a.name.localeCompare(b.name),
+  )
+
   const components = ensureUniqueNames(discovered).map((component) => ({
     id: makeId(component.importPath, component.exportName, component.name),
     name: component.name,
@@ -191,7 +197,6 @@ const main = async () => {
 
   const manifest = {
     version: 1,
-    generatedAt: new Date().toISOString(),
     sourceDirectory: path.relative(cwd, scanDir) || '.',
     components,
   }
