@@ -235,6 +235,10 @@ function CanvasItem({ id }: { id: string }) {
   const zoom = useEditorStore((state) => state.zoom)
   const projectComponents = useEditorStore((state) => state.projectComponents)
   const [previewSize, setPreviewSize] = useState<SizePreview | null>(null)
+  const [snapGuide, setSnapGuide] = useState<{ vertical: boolean; horizontal: boolean }>({
+    vertical: false,
+    horizontal: false,
+  })
   const [editingText, setEditingText] = useState(false)
   const textEditorRef = useRef<HTMLDivElement>(null)
 
@@ -282,22 +286,82 @@ function CanvasItem({ id }: { id: string }) {
     const startY = event.clientY
     let latest: SizePreview = {}
 
+    const otherRects = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-canvas-node-id]'),
+    )
+      .filter((element) => element !== wrapper)
+      .map((element) => element.getBoundingClientRect())
+      .filter((candidate) => candidate.width > 0 && candidate.height > 0)
+
+    const xCandidates = otherRects.flatMap((candidate) => [
+      candidate.left,
+      candidate.right,
+      candidate.left + candidate.width / 2,
+    ])
+    const yCandidates = otherRects.flatMap((candidate) => [
+      candidate.top,
+      candidate.bottom,
+      candidate.top + candidate.height / 2,
+    ])
+
+    const nearestSnap = (value: number, candidates: number[]) => {
+      let nearest: number | null = null
+      let nearestDistance = 7
+
+      for (const candidate of candidates) {
+        const distance = Math.abs(candidate - value)
+        if (distance < nearestDistance) {
+          nearest = candidate
+          nearestDistance = distance
+        }
+      }
+
+      return nearest
+    }
+
     document.body.classList.add('is-resizing')
 
     const move = (pointerEvent: PointerEvent) => {
       const deltaX = (pointerEvent.clientX - startX) / safeZoom
       const deltaY = (pointerEvent.clientY - startY) / safeZoom
       const next: SizePreview = {}
+      let vertical = false
+      let horizontal = false
 
       if (mode === 'width' || mode === 'both') {
-        next.width = `${Math.max(20, Math.round(startWidth + deltaX))}px`
+        let width = Math.max(20, startWidth + deltaX)
+        const rawRight = rect.left + width * safeZoom
+        const snappedX = nearestSnap(rawRight, xCandidates)
+
+        if (snappedX !== null) {
+          width = Math.max(20, (snappedX - rect.left) / safeZoom)
+          vertical = true
+        } else {
+          const gridWidth = Math.round(width / 8) * 8
+          if (Math.abs(gridWidth - width) <= 2) width = gridWidth
+        }
+
+        next.width = `${Math.round(width)}px`
       }
 
       if (mode === 'height' || mode === 'both') {
-        next.height = `${Math.max(20, Math.round(startHeight + deltaY))}px`
+        let height = Math.max(20, startHeight + deltaY)
+        const rawBottom = rect.top + height * safeZoom
+        const snappedY = nearestSnap(rawBottom, yCandidates)
+
+        if (snappedY !== null) {
+          height = Math.max(20, (snappedY - rect.top) / safeZoom)
+          horizontal = true
+        } else {
+          const gridHeight = Math.round(height / 8) * 8
+          if (Math.abs(gridHeight - height) <= 2) height = gridHeight
+        }
+
+        next.height = `${Math.round(height)}px`
       }
 
       latest = next
+      setSnapGuide({ vertical, horizontal })
       setPreviewSize(next)
     }
 
@@ -311,6 +375,7 @@ function CanvasItem({ id }: { id: string }) {
       }
 
       setPreviewSize(null)
+      setSnapGuide({ vertical: false, horizontal: false })
     }
 
     window.addEventListener('pointermove', move)
@@ -426,6 +491,7 @@ function CanvasItem({ id }: { id: string }) {
       ref={setNodeRef}
       className={`canvas-node ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''} ${node.locked ? 'locked' : ''} ${editingText ? 'editing-text' : ''}`}
       style={transformStyle}
+      data-canvas-node-id={id}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       {...listeners}
@@ -433,6 +499,9 @@ function CanvasItem({ id }: { id: string }) {
     >
       <span className="node-tag">{componentLabel}</span>
       {content}
+
+      {snapGuide.vertical && <div className="alignment-guide alignment-guide-vertical" aria-hidden="true" />}
+      {snapGuide.horizontal && <div className="alignment-guide alignment-guide-horizontal" aria-hidden="true" />}
 
       {isPrimarySelection && selectedIds.length === 1 && !isDragging && !node.locked && !editingText && (
         <>
