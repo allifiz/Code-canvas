@@ -256,7 +256,7 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
         <div className="brand">
           <span className="brand-mark">C</span>
           <span>CodeCanvas</span>
-          <small>v0.3</small>
+          <small>v0.4</small>
         </div>
 
         <nav className="app-menu-bar">
