@@ -17,7 +17,8 @@ const viewportWidths = {
   mobile: 390,
 }
 
-type SizePreview = Pick<NodeProps, 'width' | 'height'>
+type SizePreview = Pick<NodeProps, 'width' | 'height' | 'translateX' | 'translateY'>
+type ResizeMode = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 
 function shadowValue(node: CanvasNode) {
   const p = node.props
@@ -269,7 +270,7 @@ function CanvasItem({ id }: { id: string }) {
   }
 
   const startResize = (
-    mode: 'width' | 'height' | 'both',
+    mode: ResizeMode,
     event: ReactPointerEvent<HTMLButtonElement>,
   ) => {
     event.preventDefault()
@@ -282,8 +283,11 @@ function CanvasItem({ id }: { id: string }) {
     const safeZoom = zoom || 1
     const startWidth = rect.width / safeZoom
     const startHeight = rect.height / safeZoom
+    const startTranslateX = node.props.translateX ?? 0
+    const startTranslateY = node.props.translateY ?? 0
     const startX = event.clientX
     const startY = event.clientY
+    const aspectRatio = startWidth / Math.max(1, startHeight)
     let latest: SizePreview = {}
 
     const otherRects = Array.from(
@@ -319,6 +323,11 @@ function CanvasItem({ id }: { id: string }) {
       return nearest
     }
 
+    const east = mode.includes('e')
+    const west = mode.includes('w')
+    const north = mode.includes('n')
+    const south = mode.includes('s')
+
     document.body.classList.add('is-resizing')
 
     const move = (pointerEvent: PointerEvent) => {
@@ -328,36 +337,93 @@ function CanvasItem({ id }: { id: string }) {
       let vertical = false
       let horizontal = false
 
-      if (mode === 'width' || mode === 'both') {
-        let width = Math.max(20, startWidth + deltaX)
-        const rawRight = rect.left + width * safeZoom
-        const snappedX = nearestSnap(rawRight, xCandidates)
+      if (east || west) {
+        let effectiveDeltaX = deltaX
+        let width = east
+          ? startWidth + effectiveDeltaX
+          : startWidth - effectiveDeltaX
+
+        if (width < 20) {
+          width = 20
+          effectiveDeltaX = east ? 20 - startWidth : startWidth - 20
+        }
+
+        const rawEdge = east
+          ? rect.right + effectiveDeltaX * safeZoom
+          : rect.left + effectiveDeltaX * safeZoom
+        const snappedX = nearestSnap(rawEdge, xCandidates)
 
         if (snappedX !== null) {
-          width = Math.max(20, (snappedX - rect.left) / safeZoom)
+          if (east) {
+            width = Math.max(20, (snappedX - rect.left) / safeZoom)
+          } else {
+            effectiveDeltaX = (snappedX - rect.left) / safeZoom
+            width = Math.max(20, startWidth - effectiveDeltaX)
+          }
           vertical = true
         } else {
           const gridWidth = Math.round(width / 8) * 8
-          if (Math.abs(gridWidth - width) <= 2) width = gridWidth
+          if (Math.abs(gridWidth - width) <= 2) {
+            width = Math.max(20, gridWidth)
+            if (west) effectiveDeltaX = startWidth - width
+          }
         }
 
         next.width = `${Math.round(width)}px`
+        if (west) next.translateX = Math.round(startTranslateX + effectiveDeltaX)
       }
 
-      if (mode === 'height' || mode === 'both') {
-        let height = Math.max(20, startHeight + deltaY)
-        const rawBottom = rect.top + height * safeZoom
-        const snappedY = nearestSnap(rawBottom, yCandidates)
+      if (north || south) {
+        let effectiveDeltaY = deltaY
+        let height = south
+          ? startHeight + effectiveDeltaY
+          : startHeight - effectiveDeltaY
+
+        if (height < 20) {
+          height = 20
+          effectiveDeltaY = south ? 20 - startHeight : startHeight - 20
+        }
+
+        const rawEdge = south
+          ? rect.bottom + effectiveDeltaY * safeZoom
+          : rect.top + effectiveDeltaY * safeZoom
+        const snappedY = nearestSnap(rawEdge, yCandidates)
 
         if (snappedY !== null) {
-          height = Math.max(20, (snappedY - rect.top) / safeZoom)
+          if (south) {
+            height = Math.max(20, (snappedY - rect.top) / safeZoom)
+          } else {
+            effectiveDeltaY = (snappedY - rect.top) / safeZoom
+            height = Math.max(20, startHeight - effectiveDeltaY)
+          }
           horizontal = true
         } else {
           const gridHeight = Math.round(height / 8) * 8
-          if (Math.abs(gridHeight - height) <= 2) height = gridHeight
+          if (Math.abs(gridHeight - height) <= 2) {
+            height = Math.max(20, gridHeight)
+            if (north) effectiveDeltaY = startHeight - height
+          }
         }
 
         next.height = `${Math.round(height)}px`
+        if (north) next.translateY = Math.round(startTranslateY + effectiveDeltaY)
+      }
+
+      if (pointerEvent.shiftKey && (east || west) && (north || south)) {
+        const currentWidth = Number.parseFloat(next.width ?? `${startWidth}`)
+        const currentHeight = Number.parseFloat(next.height ?? `${startHeight}`)
+        const widthChange = Math.abs(currentWidth - startWidth) / Math.max(1, startWidth)
+        const heightChange = Math.abs(currentHeight - startHeight) / Math.max(1, startHeight)
+
+        if (widthChange >= heightChange) {
+          const lockedHeight = Math.max(20, currentWidth / aspectRatio)
+          next.height = `${Math.round(lockedHeight)}px`
+          if (north) next.translateY = Math.round(startTranslateY + (startHeight - lockedHeight))
+        } else {
+          const lockedWidth = Math.max(20, currentHeight * aspectRatio)
+          next.width = `${Math.round(lockedWidth)}px`
+          if (west) next.translateX = Math.round(startTranslateX + (startWidth - lockedWidth))
+        }
       }
 
       latest = next
@@ -386,8 +452,8 @@ function CanvasItem({ id }: { id: string }) {
   const visualHeight = previewSize?.height ?? node.props.height
   const intrinsicWidth = node.type === 'text' || node.type === 'button' || node.type === 'link'
 
-  const persistentX = node.props.translateX ?? 0
-  const persistentY = node.props.translateY ?? 0
+  const persistentX = previewSize?.translateX ?? node.props.translateX ?? 0
+  const persistentY = previewSize?.translateY ?? node.props.translateY ?? 0
   const dragTransform = transform
     ? ` translate3d(${transform.x}px, ${transform.y}px, 0)`
     : ''
@@ -505,21 +571,23 @@ function CanvasItem({ id }: { id: string }) {
 
       {isPrimarySelection && selectedIds.length === 1 && !isDragging && !node.locked && !editingText && (
         <>
-          <button
-            className="resize-handle resize-east"
-            aria-label="Resize width"
-            onPointerDown={(event) => startResize('width', event)}
-          />
-          <button
-            className="resize-handle resize-south"
-            aria-label="Resize height"
-            onPointerDown={(event) => startResize('height', event)}
-          />
-          <button
-            className="resize-handle resize-southeast"
-            aria-label="Resize width and height"
-            onPointerDown={(event) => startResize('both', event)}
-          />
+          {([
+            ['nw', 'resize-northwest'],
+            ['n', 'resize-north'],
+            ['ne', 'resize-northeast'],
+            ['e', 'resize-east'],
+            ['se', 'resize-southeast'],
+            ['s', 'resize-south'],
+            ['sw', 'resize-southwest'],
+            ['w', 'resize-west'],
+          ] as Array<[ResizeMode, string]>).map(([mode, className]) => (
+            <button
+              key={mode}
+              className={`resize-handle ${className}`}
+              aria-label={`Resize ${mode}`}
+              onPointerDown={(resizeEvent) => startResize(mode, resizeEvent)}
+            />
+          ))}
         </>
       )}
     </div>
