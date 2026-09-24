@@ -14,8 +14,11 @@ export default function App() {
   const addNode = useEditorStore((state) => state.addNode)
   const moveNode = useEditorStore((state) => state.moveNode)
   const addProjectNode = useEditorStore((state) => state.addProjectNode)
+  const addPreset = useEditorStore((state) => state.addPreset)
   const deleteNode = useEditorStore((state) => state.deleteNode)
   const duplicateNode = useEditorStore((state) => state.duplicateNode)
+  const copyStyle = useEditorStore((state) => state.copyStyle)
+  const pasteStyle = useEditorStore((state) => state.pasteStyle)
   const undo = useEditorStore((state) => state.undo)
   const redo = useEditorStore((state) => state.redo)
   const selectedId = useEditorStore((state) => state.selectedId)
@@ -51,6 +54,18 @@ export default function App() {
         return
       }
 
+      if (mod && event.altKey && event.key.toLowerCase() === 'c' && selectedId && !isEditing) {
+        event.preventDefault()
+        copyStyle(selectedId)
+        return
+      }
+
+      if (mod && event.altKey && event.key.toLowerCase() === 'v' && selectedId && !isEditing) {
+        event.preventDefault()
+        pasteStyle(selectedId)
+        return
+      }
+
       if ((event.key === 'Delete' || event.key === 'Backspace') && selectedId && !isEditing) {
         deleteNode(selectedId)
       }
@@ -60,7 +75,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [deleteNode, duplicateNode, redo, selectedId, undo])
+  }, [copyStyle, deleteNode, duplicateNode, pasteStyle, redo, selectedId, undo])
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -75,6 +90,10 @@ export default function App() {
 
     if (source?.source === 'palette') {
       addNode(source.type as Exclude<NodeType, 'component'>, targetParent, targetIndex)
+    }
+
+    if (source?.source === 'preset') {
+      addPreset(source.preset, targetParent, targetIndex)
     }
 
     if (source?.source === 'project-component') {
