@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { generateHtmlCode, generateReactCode } from '../lib/generator'
+import { canExportStandaloneProject, downloadStandaloneProject } from '../lib/projectExport'
 import { useEditorStore } from '../store'
 
 type CodeFormat = 'react' | 'html'
@@ -10,6 +11,7 @@ export function CodeModal({ onClose }: { onClose: () => void }) {
   const projectComponents = useEditorStore((state) => state.projectComponents)
   const [format, setFormat] = useState<CodeFormat>('react')
   const [copied, setCopied] = useState(false)
+  const canExportProject = canExportStandaloneProject(nodes)
 
   const code = useMemo(
     () =>
@@ -35,6 +37,15 @@ export function CodeModal({ onClose }: { onClose: () => void }) {
     URL.revokeObjectURL(href)
   }
 
+  const downloadProject = () => {
+    if (!canExportProject) {
+      window.alert('Standalone project export is available when the canvas only uses built-in components. Project component source files are not available inside the browser yet.')
+      return
+    }
+
+    downloadStandaloneProject(nodes, rootIds, projectComponents)
+  }
+
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <section className="code-modal" onMouseDown={(event) => event.stopPropagation()}>
@@ -58,6 +69,18 @@ export function CodeModal({ onClose }: { onClose: () => void }) {
         <footer>
           <span>Generated from the current CodeCanvas schema.</span>
           <div>
+            <button
+              className="ghost-button"
+              onClick={downloadProject}
+              disabled={!canExportProject}
+              title={
+                canExportProject
+                  ? 'Download a runnable Vite + React + Tailwind project'
+                  : 'Standalone project export cannot include external project component source yet'
+              }
+            >
+              Export project .zip
+            </button>
             <button className="ghost-button" onClick={download}>
               Download {format === 'react' ? '.tsx' : '.html'}
             </button>
