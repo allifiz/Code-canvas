@@ -14,21 +14,45 @@ export default function App() {
   const addNode = useEditorStore((state) => state.addNode)
   const moveNode = useEditorStore((state) => state.moveNode)
   const deleteNode = useEditorStore((state) => state.deleteNode)
+  const undo = useEditorStore((state) => state.undo)
+  const redo = useEditorStore((state) => state.redo)
   const selectedId = useEditorStore((state) => state.selectedId)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedId) {
-        const target = event.target as HTMLElement | null
-        if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') return
+      const target = event.target as HTMLElement | null
+      const isEditing =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.tagName === 'SELECT' ||
+        target?.isContentEditable
+
+      const mod = event.metaKey || event.ctrlKey
+
+      if (mod && event.key.toLowerCase() === 'z' && !isEditing) {
+        event.preventDefault()
+        if (event.shiftKey) redo()
+        else undo()
+        return
+      }
+
+      if (mod && event.key.toLowerCase() === 'y' && !isEditing) {
+        event.preventDefault()
+        redo()
+        return
+      }
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedId && !isEditing) {
         deleteNode(selectedId)
       }
+
       if (event.key === 'Escape') setCodeOpen(false)
     }
+
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [deleteNode, selectedId])
+  }, [deleteNode, redo, selectedId, undo])
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
