@@ -72,6 +72,7 @@ function ProjectComponentItem({
 
 function ProjectComponentForm({ onDone }: { onDone: () => void }) {
   const addProjectComponent = useEditorStore((state) => state.addProjectComponent)
+  const projectComponents = useEditorStore((state) => state.projectComponents)
   const [name, setName] = useState('')
   const [importPath, setImportPath] = useState('')
   const [exportName, setExportName] = useState('')
@@ -84,6 +85,22 @@ function ProjectComponentForm({ onDone }: { onDone: () => void }) {
 
     if (!name.trim() || !importPath.trim()) {
       setError('Name and import path are required.')
+      return
+    }
+
+    const identifier = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+    if (!identifier.test(name.trim())) {
+      setError('Name must be a valid React component identifier, for example Button or PricingCard.')
+      return
+    }
+
+    if (exportName.trim() && !identifier.test(exportName.trim())) {
+      setError('Named export must be a valid JavaScript identifier.')
+      return
+    }
+
+    if (projectComponents.some((component) => component.name === name.trim())) {
+      setError('A project component with this local name already exists.')
       return
     }
 
