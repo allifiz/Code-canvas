@@ -21,6 +21,7 @@ CodeCanvas is a source-code-first visual UI builder. Instead of treating the can
 - Edit layout, component props, sizing, spacing, typography, fills, opacity, borders, radius, shadows, overflow, and image fit
 - Copy and paste visual styles between layers
 - Zoom the canvas and toggle the layout grid
+- Resize selected layers directly from canvas handles
 - Switch desktop, tablet, and mobile canvas widths
 - Persist the current document locally
 - Export readable React + Tailwind or standalone HTML + CSS
@@ -184,7 +185,7 @@ When external Project Components are used, standalone ZIP export is intentionall
 - [x] Blocks / preset sections
 - [x] Canvas zoom and grid
 - [x] Copy / paste visual styles
-- [ ] Drag resize handles
+- [x] Drag resize handles
 - [ ] Inline text editing
 - [ ] Design tokens
 - [ ] Component variants
