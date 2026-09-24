@@ -174,7 +174,12 @@ function LayerNode({ id, depth = 0 }: { id: string; depth?: number }) {
   const node = useEditorStore((state) => state.nodes[id])
   const selectedId = useEditorStore((state) => state.selectedId)
   const selectNode = useEditorStore((state) => state.selectNode)
+  const renameNode = useEditorStore((state) => state.renameNode)
+  const toggleNodeVisibility = useEditorStore((state) => state.toggleNodeVisibility)
+  const toggleNodeLock = useEditorStore((state) => state.toggleNodeLock)
   const projectComponents = useEditorStore((state) => state.projectComponents)
+  const [editing, setEditing] = useState(false)
+  const [draftName, setDraftName] = useState('')
 
   if (!node) return null
 
@@ -183,23 +188,72 @@ function LayerNode({ id, depth = 0 }: { id: string; depth?: number }) {
       ? projectComponents.find((component) => component.id === node.props.componentId)
       : undefined
 
-  const label = customComponent?.name ?? (
+  const fallbackLabel = customComponent?.name ?? (
     node.type === 'container' ? 'Frame' :
     node.type.charAt(0).toUpperCase() + node.type.slice(1)
   )
+  const label = node.name || fallbackLabel
+
+  const startRename = () => {
+    setDraftName(label)
+    setEditing(true)
+  }
+
+  const commitRename = () => {
+    renameNode(id, draftName)
+    setEditing(false)
+  }
 
   return (
     <>
-      <button
-        className={`layer-row ${selectedId === id ? 'active' : ''}`}
-        style={{ paddingLeft: 12 + depth * 14 }}
-        onClick={() => selectNode(id)}
+      <div
+        className={`layer-entry ${selectedId === id ? 'active' : ''} ${node.visible === false ? 'is-hidden' : ''} ${node.locked ? 'is-locked' : ''}`}
+        style={{ paddingLeft: 6 + depth * 14 }}
       >
-        <span className="layer-dot" />
-        <span>{label}</span>
-        <code>{id.slice(0, 5)}</code>
-      </button>
-      {node.children.map((childId) => <LayerNode key={childId} id={childId} depth={depth + 1} />)}
+        <button className="layer-row" onClick={() => selectNode(id)} onDoubleClick={startRename}>
+          <span className="layer-dot" />
+          {editing ? (
+            <input
+              className="layer-name-input"
+              value={draftName}
+              autoFocus
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => setDraftName(event.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur()
+                if (event.key === 'Escape') {
+                  setEditing(false)
+                  setDraftName(label)
+                }
+              }}
+            />
+          ) : (
+            <span className="layer-name">{label}</span>
+          )}
+        </button>
+
+        <div className="layer-actions">
+          <button
+            className={node.visible === false ? 'muted' : ''}
+            title={node.visible === false ? 'Show layer' : 'Hide layer'}
+            onClick={() => toggleNodeVisibility(id)}
+          >
+            {node.visible === false ? '○' : '◉'}
+          </button>
+          <button
+            className={node.locked ? 'active' : ''}
+            title={node.locked ? 'Unlock layer' : 'Lock layer'}
+            onClick={() => toggleNodeLock(id)}
+          >
+            {node.locked ? '◆' : '◇'}
+          </button>
+        </div>
+      </div>
+
+      {node.children.map((childId) => (
+        <LayerNode key={childId} id={childId} depth={depth + 1} />
+      ))}
     </>
   )
 }
