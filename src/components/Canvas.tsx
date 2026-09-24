@@ -1,5 +1,5 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core'
-import type { CSSProperties, MouseEvent } from 'react'
+import { Fragment, type CSSProperties, type MouseEvent } from 'react'
 import { useEditorStore } from '../store'
 import type { CanvasNode } from '../types'
 
@@ -37,6 +37,19 @@ function nodeStyle(node: CanvasNode): CSSProperties {
   return base
 }
 
+function InsertZone({ parentId, index }: { parentId: string | null; index: number }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `insert-${parentId ?? 'root'}-${index}`,
+    data: { parentId, index, kind: 'insert' },
+  })
+
+  return (
+    <div ref={setNodeRef} className={`insert-zone ${isOver ? 'active' : ''}`}>
+      <span />
+    </div>
+  )
+}
+
 function ContainerContent({ node }: { node: CanvasNode }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `drop-${node.id}`,
@@ -46,7 +59,15 @@ function ContainerContent({ node }: { node: CanvasNode }) {
   return (
     <div ref={setNodeRef} className={`container-content ${isOver ? 'drop-active' : ''}`} style={nodeStyle(node)}>
       {node.children.length ? (
-        node.children.map((childId) => <CanvasItem key={childId} id={childId} />)
+        <>
+          {node.children.map((childId, index) => (
+            <Fragment key={childId}>
+              <InsertZone parentId={node.id} index={index} />
+              <CanvasItem id={childId} />
+            </Fragment>
+          ))}
+          <InsertZone parentId={node.id} index={node.children.length} />
+        </>
       ) : (
         <div className="container-placeholder">Drop components here</div>
       )}
@@ -130,7 +151,15 @@ export function Canvas() {
           style={{ width: viewportWidths[viewport] }}
         >
           {rootIds.length ? (
-            rootIds.map((id) => <CanvasItem key={id} id={id} />)
+            <>
+              {rootIds.map((id, index) => (
+                <Fragment key={id}>
+                  <InsertZone parentId={null} index={index} />
+                  <CanvasItem id={id} />
+                </Fragment>
+              ))}
+              <InsertZone parentId={null} index={rootIds.length} />
+            </>
           ) : (
             <div className="empty-canvas">
               <div className="empty-mark">+</div>
