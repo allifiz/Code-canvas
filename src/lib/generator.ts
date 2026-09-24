@@ -161,6 +161,10 @@ function inlineStyle(props: NodeProps) {
 
   if (props.objectPosition) pairs.push(`objectPosition: ${JSON.stringify(props.objectPosition)}`)
 
+  if (props.translateX || props.translateY) {
+    pairs.push(`transform: ${JSON.stringify(`translate(${props.translateX ?? 0}px, ${props.translateY ?? 0}px)`)}`)
+  }
+
   return pairs.length ? ` style={{ ${pairs.join(', ')} }}` : ''
 }
 
@@ -313,6 +317,10 @@ function cssRules(node: CanvasNode) {
   assign('margin-right', cssValue(p.marginRight))
   assign('margin-bottom', cssValue(p.marginBottom))
   assign('margin-left', cssValue(p.marginLeft))
+
+  if (p.translateX || p.translateY) {
+    assign('transform', `translate(${p.translateX ?? 0}px, ${p.translateY ?? 0}px)`)
+  }
 
   assign('background', p.background)
   assign('color', p.color)
