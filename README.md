@@ -63,6 +63,7 @@ npm run build
 - `Ctrl/Cmd + Z`: undo
 - `Ctrl/Cmd + Shift + Z`: redo
 - `Ctrl/Cmd + Y`: redo
+- `Ctrl/Cmd + D`: duplicate selected subtree
 - `Delete / Backspace`: delete selected component
 - `Escape`: close the code modal
 
@@ -104,6 +105,14 @@ Then use **Project Components → Import** inside CodeCanvas.
 
 The scanner currently detects exported PascalCase components from `.tsx` and `.jsx` files. Children support is inferred heuristically and can be adjusted manually after import.
 
+## Standalone project export
+
+From the **Code** modal, **Export project .zip** creates a runnable Vite + React + Tailwind project when the canvas only uses built-in CodeCanvas components.
+
+The ZIP includes the generated page, Vite/Tailwind setup, and the original `codecanvas.project.json` document.
+
+When external Project Components are used, standalone ZIP export is intentionally disabled because CodeCanvas does not have those component source files in the browser. The generated React code still preserves their real imports for integration into the original project.
+
 ## Current component palette
 
 - Container
@@ -132,7 +141,7 @@ The scanner currently detects exported PascalCase components from `.tsx` and `.j
 - [x] HTML/CSS generator
 - [ ] Design tokens
 - [ ] Component variants
-- [ ] Export a full project
+- [x] Export a standalone React project ZIP for built-in components
 - [ ] Plugin API
 
 ## Principles
