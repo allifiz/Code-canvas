@@ -1,13 +1,21 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { CanvasDocument, CanvasNode, NodeProps, NodeType, Viewport } from './types'
+import type {
+  CanvasDocument,
+  CanvasNode,
+  ComponentPropValue,
+  NodeProps,
+  NodeType,
+  ProjectComponentDefinition,
+  Viewport,
+} from './types'
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `node-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-function makeNode(type: NodeType): CanvasNode {
+function makeNode(type: NodeType, component?: ProjectComponentDefinition): CanvasNode {
   const id = uid()
 
   const defaults: Record<NodeType, NodeProps> = {
@@ -57,6 +65,12 @@ function makeNode(type: NodeType): CanvasNode {
       width: '100%',
       minHeight: 180,
       radius: 14,
+    },
+    component: {
+      componentId: component?.id,
+      componentProps: structuredClone(component?.defaultProps ?? {}),
+      width: '100%',
+      minHeight: component?.acceptsChildren ? 88 : 56,
     },
   }
 
@@ -124,9 +138,20 @@ type DocumentSnapshot = CanvasDocument
 interface EditorState extends CanvasDocument {
   selectedId: string | null
   viewport: Viewport
+  projectComponents: ProjectComponentDefinition[]
   past: DocumentSnapshot[]
   future: DocumentSnapshot[]
-  addNode: (type: NodeType, parentId: string | null, index?: number) => string
+  addNode: (type: Exclude<NodeType, 'component'>, parentId: string | null, index?: number) => string
+  addProjectNode: (componentId: string, parentId: string | null, index?: number) => string | null
+  addProjectComponent: (input: {
+    name: string
+    importPath: string
+    exportName?: string
+    defaultProps?: Record<string, ComponentPropValue>
+    acceptsChildren?: boolean
+  }) => string
+  removeProjectComponent: (componentId: string) => void
+  replaceProjectComponents: (components: ProjectComponentDefinition[]) => void
   moveNode: (nodeId: string, parentId: string | null, index?: number) => void
   updateNode: (nodeId: string, props: Partial<NodeProps>) => void
   deleteNode: (nodeId: string) => void
@@ -134,6 +159,7 @@ interface EditorState extends CanvasDocument {
   setViewport: (viewport: Viewport) => void
   loadDemo: () => void
   loadDocument: (document: CanvasDocument) => void
+  loadProject: (document: CanvasDocument, components: ProjectComponentDefinition[]) => void
   clearCanvas: () => void
   undo: () => void
   redo: () => void
@@ -166,6 +192,49 @@ const insertAt = (ids: string[], id: string, index?: number) => {
   return next
 }
 
+const attachNode = (
+  state: EditorState,
+  node: CanvasNode,
+  parentId: string | null,
+  index?: number,
+) => {
+  const nodes = { ...state.nodes, [node.id]: node }
+  const history = pushHistory(state)
+
+  if (parentId && nodes[parentId]?.type === 'container') {
+    nodes[parentId] = {
+      ...nodes[parentId],
+      children: insertAt(nodes[parentId].children, node.id, index),
+    }
+
+    return { nodes, selectedId: node.id, ...history }
+  }
+
+  if (parentId) {
+    const parent = nodes[parentId]
+    const definition =
+      parent?.type === 'component'
+        ? state.projectComponents.find((item) => item.id === parent.props.componentId)
+        : undefined
+
+    if (parent && definition?.acceptsChildren) {
+      nodes[parentId] = {
+        ...parent,
+        children: insertAt(parent.children, node.id, index),
+      }
+
+      return { nodes, selectedId: node.id, ...history }
+    }
+  }
+
+  return {
+    nodes,
+    rootIds: insertAt(state.rootIds, node.id, index),
+    selectedId: node.id,
+    ...history,
+  }
+}
+
 const demo = createDemoDocument()
 
 export const useEditorStore = create<EditorState>()(
@@ -174,40 +243,65 @@ export const useEditorStore = create<EditorState>()(
       ...demo,
       selectedId: demo.rootIds[0],
       viewport: 'desktop',
+      projectComponents: [],
       past: [],
       future: [],
 
       addNode: (type, parentId, index) => {
         const node = makeNode(type)
-
-        set((state) => {
-          const nodes = { ...state.nodes, [node.id]: node }
-          const history = pushHistory(state)
-
-          if (parentId && nodes[parentId]?.type === 'container') {
-            nodes[parentId] = {
-              ...nodes[parentId],
-              children: insertAt(nodes[parentId].children, node.id, index),
-            }
-
-            return { nodes, selectedId: node.id, ...history }
-          }
-
-          return {
-            nodes,
-            rootIds: insertAt(state.rootIds, node.id, index),
-            selectedId: node.id,
-            ...history,
-          }
-        })
-
+        set((state) => attachNode(state, node, parentId, index))
         return node.id
       },
+
+      addProjectNode: (componentId, parentId, index) => {
+        const component = get().projectComponents.find((item) => item.id === componentId)
+        if (!component) return null
+
+        const node = makeNode('component', component)
+        set((state) => attachNode(state, node, parentId, index))
+        return node.id
+      },
+
+      addProjectComponent: (input) => {
+        const id = `component-${uid()}`
+        const component: ProjectComponentDefinition = {
+          id,
+          name: input.name.trim(),
+          importPath: input.importPath.trim(),
+          exportName: input.exportName?.trim() || undefined,
+          defaultProps: structuredClone(input.defaultProps ?? {}),
+          acceptsChildren: input.acceptsChildren ?? false,
+        }
+
+        set((state) => ({
+          projectComponents: [...state.projectComponents, component],
+        }))
+
+        return id
+      },
+
+      removeProjectComponent: (componentId) =>
+        set((state) => ({
+          projectComponents: state.projectComponents.filter((item) => item.id !== componentId),
+        })),
+
+      replaceProjectComponents: (projectComponents) =>
+        set({ projectComponents: structuredClone(projectComponents) }),
 
       moveNode: (nodeId, parentId, index) => {
         const state = get()
         if (!state.nodes[nodeId] || nodeId === parentId) return
-        if (parentId && state.nodes[parentId]?.type !== 'container') return
+
+        if (parentId) {
+          const target = state.nodes[parentId]
+          const projectComponent =
+            target?.type === 'component'
+              ? state.projectComponents.find((item) => item.id === target.props.componentId)
+              : undefined
+          const canAcceptChildren = target?.type === 'container' || projectComponent?.acceptsChildren
+          if (!canAcceptChildren) return
+        }
+
         if (parentId && collectDescendants(state.nodes, nodeId).has(parentId)) return
 
         const sourceParentId =
@@ -312,6 +406,15 @@ export const useEditorStore = create<EditorState>()(
           ...pushHistory(state),
         })),
 
+      loadProject: (document, projectComponents) =>
+        set((state) => ({
+          nodes: structuredClone(document.nodes),
+          rootIds: [...document.rootIds],
+          projectComponents: structuredClone(projectComponents),
+          selectedId: null,
+          ...pushHistory(state),
+        })),
+
       clearCanvas: () =>
         set((state) => ({
           nodes: {},
@@ -352,6 +455,7 @@ export const useEditorStore = create<EditorState>()(
         nodes: state.nodes,
         rootIds: state.rootIds,
         viewport: state.viewport,
+        projectComponents: state.projectComponents,
       }),
     },
   ),
