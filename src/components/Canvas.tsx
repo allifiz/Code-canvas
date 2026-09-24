@@ -9,29 +9,79 @@ const viewportWidths = {
   mobile: 390,
 }
 
+function shadowValue(node: CanvasNode) {
+  const p = node.props
+  if (!p.shadowBlur && !p.shadowSpread && !p.shadowX && !p.shadowY) return undefined
+
+  return `${p.shadowX ?? 0}px ${p.shadowY ?? 0}px ${p.shadowBlur ?? 0}px ${p.shadowSpread ?? 0}px ${p.shadowColor ?? '#000000'}`
+}
+
 function nodeStyle(node: CanvasNode): CSSProperties {
   const p = node.props
+
   const base: CSSProperties = {
     width: p.width,
+    height: p.height,
+    minWidth: p.minWidth,
     minHeight: p.minHeight,
-    padding: p.padding,
-    gap: p.gap,
+    maxWidth: p.maxWidth,
+    maxHeight: p.maxHeight,
+
+    paddingTop: p.paddingTop ?? p.padding,
+    paddingRight: p.paddingRight ?? p.padding,
+    paddingBottom: p.paddingBottom ?? p.padding,
+    paddingLeft: p.paddingLeft ?? p.padding,
+
+    marginTop: p.marginTop,
+    marginRight: p.marginRight,
+    marginBottom: p.marginBottom,
+    marginLeft: p.marginLeft,
+
     background: p.background,
     color: p.color,
+    opacity: p.opacity,
+
+    fontFamily: p.fontFamily,
     fontSize: p.fontSize,
     fontWeight: p.fontWeight,
-    borderRadius: p.radius,
+    lineHeight: p.lineHeight,
+    letterSpacing: p.letterSpacing,
+    textAlign: p.textAlign,
+    textTransform: p.textTransform,
+    textDecoration: p.textDecoration,
+
+    borderTopLeftRadius: p.radiusTopLeft ?? p.radius,
+    borderTopRightRadius: p.radiusTopRight ?? p.radius,
+    borderBottomRightRadius: p.radiusBottomRight ?? p.radius,
+    borderBottomLeftRadius: p.radiusBottomLeft ?? p.radius,
+
     borderColor: p.borderColor,
-    borderStyle: p.borderColor ? 'solid' : undefined,
-    borderWidth: p.borderColor ? 1 : undefined,
+    borderStyle: p.borderStyle,
+    borderWidth: p.borderStyle === 'none' ? 0 : p.borderWidth,
+
+    boxShadow: shadowValue(node),
+    overflow: p.overflow,
     boxSizing: 'border-box',
   }
 
   if (node.type === 'container') {
     base.display = p.display
-    base.flexDirection = p.direction
-    base.alignItems = p.align
-    base.justifyContent = p.justify
+    base.gap = p.gap
+
+    if (p.display === 'flex') {
+      base.flexDirection = p.direction
+      base.alignItems = p.align
+      base.justifyContent = p.justify
+    }
+
+    if (p.display === 'grid') {
+      base.gridTemplateColumns = `repeat(${Math.max(1, p.gridColumns ?? 2)}, minmax(0, 1fr))`
+    }
+  }
+
+  if (node.type === 'image') {
+    base.objectFit = p.objectFit
+    base.objectPosition = p.objectPosition
   }
 
   return base
@@ -88,12 +138,17 @@ function ContainerContent({ node }: { node: CanvasNode }) {
     data: { parentId: node.id },
   })
 
+  const direction =
+    node.props.display === 'flex' && node.props.direction === 'row'
+      ? 'row'
+      : 'column'
+
   return (
     <div ref={setNodeRef} className={`container-content ${isOver ? 'drop-active' : ''}`} style={nodeStyle(node)}>
       {node.children.length ? (
-        <ChildrenList node={node} direction={node.props.direction ?? 'column'} />
+        <ChildrenList node={node} direction={direction} />
       ) : (
-        <div className="container-placeholder">Drop components here</div>
+        <div className="container-placeholder">Drop layers here</div>
       )}
     </div>
   )
@@ -183,18 +238,41 @@ function CanvasItem({ id }: { id: string }) {
     switch (node.type) {
       case 'container':
         return <ContainerContent node={node} />
+
       case 'text':
         return <div style={nodeStyle(node)}>{node.props.text}</div>
+
       case 'button':
         return (
           <button className="canvas-button" style={nodeStyle(node)} type="button">
             {node.props.text}
           </button>
         )
+
       case 'input':
         return <input className="canvas-input" style={nodeStyle(node)} placeholder={node.props.placeholder} readOnly />
+
+      case 'textarea':
+        return <textarea className="canvas-input canvas-textarea" style={nodeStyle(node)} placeholder={node.props.placeholder} readOnly />
+
+      case 'link':
+        return (
+          <a
+            className="canvas-link"
+            style={nodeStyle(node)}
+            href={node.props.href ?? '#'}
+            onClick={(event) => event.preventDefault()}
+          >
+            {node.props.text}
+          </a>
+        )
+
+      case 'divider':
+        return <div className="canvas-divider" style={nodeStyle(node)} />
+
       case 'image':
         return <img className="canvas-image" style={nodeStyle(node)} src={node.props.src} alt={node.props.alt ?? ''} />
+
       case 'component': {
         const component = projectComponents.find((item) => item.id === node.props.componentId)
         return <ProjectComponentContent node={node} component={component} />
@@ -205,7 +283,9 @@ function CanvasItem({ id }: { id: string }) {
   const componentLabel =
     node.type === 'component'
       ? projectComponents.find((item) => item.id === node.props.componentId)?.name ?? 'component'
-      : node.type
+      : node.type === 'container'
+        ? 'Frame'
+        : node.type
 
   return (
     <div
@@ -225,6 +305,8 @@ function CanvasItem({ id }: { id: string }) {
 export function Canvas() {
   const rootIds = useEditorStore((state) => state.rootIds)
   const viewport = useEditorStore((state) => state.viewport)
+  const zoom = useEditorStore((state) => state.zoom)
+  const showGrid = useEditorStore((state) => state.showGrid)
   const selectNode = useEditorStore((state) => state.selectNode)
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas-root',
@@ -232,34 +314,37 @@ export function Canvas() {
   })
 
   return (
-    <main className="workspace" onClick={() => selectNode(null)}>
+    <main className={`workspace ${showGrid ? '' : 'grid-hidden'}`} onClick={() => selectNode(null)}>
       <div className="viewport-label">
         <span>{viewport}</span>
-        <code>{viewportWidths[viewport]} px</code>
+        <code>{viewportWidths[viewport]} px · {Math.round(zoom * 100)}%</code>
       </div>
+
       <div className="canvas-scroll">
-        <div
-          ref={setNodeRef}
-          className={`canvas ${isOver ? 'drop-active-root' : ''}`}
-          style={{ width: viewportWidths[viewport] }}
-        >
-          {rootIds.length ? (
-            <>
-              {rootIds.map((id, index) => (
-                <Fragment key={id}>
-                  <InsertZone parentId={null} index={index} />
-                  <CanvasItem id={id} />
-                </Fragment>
-              ))}
-              <InsertZone parentId={null} index={rootIds.length} />
-            </>
-          ) : (
-            <div className="empty-canvas">
-              <div className="empty-mark">+</div>
-              <h2>Start with a component</h2>
-              <p>Drag a built-in or project component from the left panel.</p>
-            </div>
-          )}
+        <div className="canvas-zoom-stage" style={{ width: viewportWidths[viewport], transform: `scale(${zoom})` }}>
+          <div
+            ref={setNodeRef}
+            className={`canvas ${isOver ? 'drop-active-root' : ''}`}
+            style={{ width: viewportWidths[viewport] }}
+          >
+            {rootIds.length ? (
+              <>
+                {rootIds.map((id, index) => (
+                  <Fragment key={id}>
+                    <InsertZone parentId={null} index={index} />
+                    <CanvasItem id={id} />
+                  </Fragment>
+                ))}
+                <InsertZone parentId={null} index={rootIds.length} />
+              </>
+            ) : (
+              <div className="empty-canvas">
+                <div className="empty-mark">+</div>
+                <h2>Start designing</h2>
+                <p>Drag a block or primitive from Assets, or use Insert from the menu bar.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </main>
