@@ -21,6 +21,14 @@ CodeCanvas is a source-code-first visual UI builder. Instead of treating the can
 - Edit layout, component props, sizing, spacing, typography, fills, opacity, borders, radius, shadows, overflow, and image fit
 - Copy and paste visual styles between layers
 - Zoom the canvas and toggle the layout grid
+- Resize selected layers from eight canvas handles, with Shift aspect-ratio lock
+- Snap resize edges to nearby layer edges and centers with visual alignment guides
+- Marquee-select multiple layers from empty canvas space
+- Shift-click to add or remove layers from a selection
+- Group / ungroup selected sibling layers
+- Nudge selected layers with arrow keys; hold Shift for 10px movement
+- Pan the canvas with Space + drag
+- Reorder and reparent layers by dragging from the Layers panel
 - Resize selected layers directly from canvas handles
 - Rename, hide, and lock layers from the Layers panel
 - Double-click text layers to edit content directly on the canvas
@@ -71,6 +79,12 @@ npm run build
 - `Ctrl/Cmd + Z`: undo
 - `Ctrl/Cmd + Shift + Z`: redo
 - `Ctrl/Cmd + Y`: redo
+- `Ctrl/Cmd + A`: select visible unlocked root layers
+- `Ctrl/Cmd + G`: group selected sibling layers
+- `Ctrl/Cmd + Shift + G`: ungroup selected frame
+- Arrow keys: nudge selection by 1px
+- Shift + Arrow keys: nudge selection by 10px
+- Space + drag: pan the canvas
 - `Ctrl/Cmd + D`: duplicate selected subtree
 - `Ctrl/Cmd + Alt + C`: copy visual style
 - `Ctrl/Cmd + Alt + V`: paste visual style
@@ -80,6 +94,23 @@ npm run build
 ## Document portability
 
 Use **Export** to save the current canvas as a versioned CodeCanvas JSON file, then **Import** to restore it later or move it to another browser.
+
+## Interaction workflow
+
+CodeCanvas v0.4 adds design-tool interaction patterns on top of the source-code-first schema:
+
+- **Shift + click** builds a multi-selection
+- Drag on empty canvas space for **marquee selection**
+- **Ctrl/Cmd + G** groups selected sibling layers into a Frame
+- **Ctrl/Cmd + Shift + G** ungroups the selected Frame
+- Arrow keys nudge selected layers without changing flex/grid ordering
+- **Shift + Arrow** moves 10px at a time
+- Hold **Space** and drag to pan the canvas
+- Drag the handle in **Layers** to reorder or reparent a layer
+- Resize from all eight directions; hold **Shift** on a corner handle to preserve aspect ratio
+- Resize edges snap to nearby layer edges/centers and show purple alignment guides
+
+Nudging is stored as X/Y translation properties, so it remains represented in React and HTML/CSS exports instead of existing only inside the editor.
 
 ## Design inspector
 
