@@ -9,6 +9,9 @@ CodeCanvas is a source-code-first visual UI builder. Instead of treating the can
 - Drag components from the palette into the canvas
 - Nest components inside containers
 - Move existing nodes between containers
+- Reorder siblings with positional drag-and-drop
+- Undo / redo with keyboard shortcuts
+- Import and export CodeCanvas JSON documents
 - Edit layout and visual properties
 - Switch desktop, tablet, and mobile canvas widths
 - Persist the current document locally
@@ -52,6 +55,18 @@ Then open the Vite URL shown in your terminal.
 npm run build
 ```
 
+## Editor shortcuts
+
+- `Ctrl/Cmd + Z`: undo
+- `Ctrl/Cmd + Shift + Z`: redo
+- `Ctrl/Cmd + Y`: redo
+- `Delete / Backspace`: delete selected component
+- `Escape`: close the code modal
+
+## Document portability
+
+Use **Export** to save the current canvas as a versioned CodeCanvas JSON file, then **Import** to restore it later or move it to another browser.
+
 ## Current component palette
 
 - Container
@@ -68,8 +83,8 @@ npm run build
 - [x] Responsive canvas presets
 - [x] React + Tailwind generator
 - [x] Local persistence
-- [ ] Reorder siblings with drag and drop
-- [ ] Undo / redo
+- [x] Reorder siblings with drag and drop
+- [x] Undo / redo
 - [ ] Import project React components
 - [ ] Parse existing JSX into the CodeCanvas schema
 - [ ] Two-way visual/code editing
