@@ -1,5 +1,5 @@
 import { useDraggable } from '@dnd-kit/core'
-import { useState } from 'react'
+import { useRef, useState, type ChangeEvent } from 'react'
 import type { ComponentPropValue, NodeType, ProjectComponentDefinition } from '../types'
 import { useEditorStore } from '../store'
 
@@ -197,9 +197,72 @@ function LayerNode({ id, depth = 0 }: { id: string; depth?: number }) {
 
 export function Sidebar() {
   const rootIds = useEditorStore((state) => state.rootIds)
+  const nodes = useEditorStore((state) => state.nodes)
   const projectComponents = useEditorStore((state) => state.projectComponents)
   const removeProjectComponent = useEditorStore((state) => state.removeProjectComponent)
+  const replaceProjectComponents = useEditorStore((state) => state.replaceProjectComponents)
   const [addingComponent, setAddingComponent] = useState(false)
+  const manifestInputRef = useRef<HTMLInputElement>(null)
+
+  const removeComponent = (componentId: string) => {
+    const inUse = Object.values(nodes).some(
+      (node) => node.type === 'component' && node.props.componentId === componentId,
+    )
+
+    if (inUse) {
+      window.alert('This project component is still used on the canvas. Delete those nodes first.')
+      return
+    }
+
+    removeProjectComponent(componentId)
+  }
+
+  const importManifest = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    try {
+      const parsed = JSON.parse(await file.text()) as {
+        version?: unknown
+        components?: unknown
+      }
+
+      if (parsed.version !== 1 || !Array.isArray(parsed.components)) throw new Error()
+
+      const imported = parsed.components.filter((value): value is ProjectComponentDefinition => {
+        if (!value || typeof value !== 'object') return false
+        const component = value as Partial<ProjectComponentDefinition>
+
+        return (
+          typeof component.id === 'string' &&
+          typeof component.name === 'string' &&
+          typeof component.importPath === 'string' &&
+          (component.exportName === undefined || typeof component.exportName === 'string') &&
+          typeof component.acceptsChildren === 'boolean' &&
+          !!component.defaultProps &&
+          typeof component.defaultProps === 'object' &&
+          !Array.isArray(component.defaultProps) &&
+          Object.values(component.defaultProps).every(
+            (prop) => typeof prop === 'string' || typeof prop === 'number' || typeof prop === 'boolean',
+          )
+        )
+      })
+
+      if (imported.length !== parsed.components.length) throw new Error()
+
+      const merged = [...projectComponents]
+      for (const component of imported) {
+        const existingIndex = merged.findIndex((item) => item.name === component.name)
+        if (existingIndex >= 0) merged[existingIndex] = component
+        else merged.push(component)
+      }
+
+      replaceProjectComponents(merged)
+    } catch {
+      window.alert('Could not import this manifest. Run npm run scan:components to generate a valid file.')
+    }
+  }
 
   return (
     <aside className="sidebar panel">
@@ -218,10 +281,22 @@ export function Sidebar() {
       <section className="project-section">
         <div className="panel-title">
           <span>Project Components</span>
-          <button className="panel-add-button" onClick={() => setAddingComponent((value) => !value)}>
-            {addingComponent ? 'Close' : '+ Add'}
-          </button>
+          <div className="panel-title-actions">
+            <button className="panel-add-button" onClick={() => manifestInputRef.current?.click()}>Import</button>
+            <button className="panel-add-button" onClick={() => setAddingComponent((value) => !value)}>
+              {addingComponent ? 'Close' : '+ Add'}
+            </button>
+          </div>
         </div>
+
+        <input
+          ref={manifestInputRef}
+          className="visually-hidden"
+          type="file"
+          accept="application/json,.json"
+          onChange={importManifest}
+          tabIndex={-1}
+        />
 
         {addingComponent && <ProjectComponentForm onDone={() => setAddingComponent(false)} />}
 
@@ -231,7 +306,7 @@ export function Sidebar() {
               <ProjectComponentItem
                 key={component.id}
                 component={component}
-                onRemove={() => removeProjectComponent(component.id)}
+                onRemove={() => removeComponent(component.id)}
               />
             ))
           ) : (
