@@ -1,6 +1,8 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import {
   Fragment,
+  useEffect,
+  useRef,
   useState,
   type CSSProperties,
   type MouseEvent,
@@ -232,17 +234,33 @@ function CanvasItem({ id }: { id: string }) {
   const zoom = useEditorStore((state) => state.zoom)
   const projectComponents = useEditorStore((state) => state.projectComponents)
   const [previewSize, setPreviewSize] = useState<SizePreview | null>(null)
+  const [editingText, setEditingText] = useState(false)
+  const textEditorRef = useRef<HTMLDivElement>(null)
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `node-${id}`,
     data: { source: 'canvas', nodeId: id },
+    disabled: !!node?.locked || editingText,
   })
 
-  if (!node) return null
+  useEffect(() => {
+    if (!editingText) return
+    textEditorRef.current?.focus()
+  }, [editingText])
+
+  if (!node || node.visible === false) return null
 
   const handleClick = (event: MouseEvent) => {
     event.stopPropagation()
+    if (node.locked) return
     selectNode(id)
+  }
+
+  const handleDoubleClick = (event: MouseEvent) => {
+    event.stopPropagation()
+    if (node.locked || node.type !== 'text') return
+    selectNode(id)
+    setEditingText(true)
   }
 
   const startResize = (
@@ -319,7 +337,34 @@ function CanvasItem({ id }: { id: string }) {
         return <ContainerContent node={node} preview={previewSize} />
 
       case 'text':
-        return <div style={nodeStyle(node, previewSize)}>{node.props.text}</div>
+        return editingText ? (
+          <div
+            ref={textEditorRef}
+            className="canvas-inline-text-editor"
+            contentEditable
+            suppressContentEditableWarning
+            style={nodeStyle(node, previewSize)}
+            onBlur={(event) => {
+              updateNode(id, { text: event.currentTarget.textContent ?? '' })
+              setEditingText(false)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                event.currentTarget.textContent = node.props.text ?? ''
+                event.currentTarget.blur()
+              }
+              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                event.preventDefault()
+                event.currentTarget.blur()
+              }
+            }}
+          >
+            {node.props.text}
+          </div>
+        ) : (
+          <div style={nodeStyle(node, previewSize)}>{node.props.text}</div>
+        )
 
       case 'button':
         return (
@@ -371,16 +416,17 @@ function CanvasItem({ id }: { id: string }) {
   return (
     <div
       ref={setNodeRef}
-      className={`canvas-node ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
+      className={`canvas-node ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''} ${node.locked ? 'locked' : ''} ${editingText ? 'editing-text' : ''}`}
       style={transformStyle}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       {...listeners}
       {...attributes}
     >
       <span className="node-tag">{componentLabel}</span>
       {content}
 
-      {isSelected && !isDragging && (
+      {isSelected && !isDragging && !node.locked && !editingText && (
         <>
           <button
             className="resize-handle resize-east"
