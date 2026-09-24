@@ -93,6 +93,9 @@ export interface NodeProps {
 export interface CanvasNode {
   id: string
   type: NodeType
+  name?: string
+  visible?: boolean
+  locked?: boolean
   props: NodeProps
   children: string[]
 }
