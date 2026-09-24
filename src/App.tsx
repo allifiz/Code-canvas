@@ -15,6 +15,7 @@ export default function App() {
   const moveNode = useEditorStore((state) => state.moveNode)
   const addProjectNode = useEditorStore((state) => state.addProjectNode)
   const deleteNode = useEditorStore((state) => state.deleteNode)
+  const duplicateNode = useEditorStore((state) => state.duplicateNode)
   const undo = useEditorStore((state) => state.undo)
   const redo = useEditorStore((state) => state.redo)
   const selectedId = useEditorStore((state) => state.selectedId)
@@ -44,6 +45,12 @@ export default function App() {
         return
       }
 
+      if (mod && event.key.toLowerCase() === 'd' && selectedId && !isEditing) {
+        event.preventDefault()
+        duplicateNode(selectedId)
+        return
+      }
+
       if ((event.key === 'Delete' || event.key === 'Backspace') && selectedId && !isEditing) {
         deleteNode(selectedId)
       }
@@ -53,7 +60,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [deleteNode, redo, selectedId, undo])
+  }, [deleteNode, duplicateNode, redo, selectedId, undo])
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
