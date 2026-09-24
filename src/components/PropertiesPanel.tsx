@@ -27,6 +27,7 @@ export function PropertiesPanel() {
   const node = useEditorStore((state) => (state.selectedId ? state.nodes[state.selectedId] : undefined))
   const updateNode = useEditorStore((state) => state.updateNode)
   const deleteNode = useEditorStore((state) => state.deleteNode)
+  const projectComponents = useEditorStore((state) => state.projectComponents)
 
   if (!node || !selectedId) {
     return (
@@ -41,6 +42,19 @@ export function PropertiesPanel() {
   }
 
   const update = (props: Partial<NodeProps>) => updateNode(selectedId, props)
+  const projectComponent =
+    node.type === 'component'
+      ? projectComponents.find((component) => component.id === node.props.componentId)
+      : undefined
+
+  const updateComponentProp = (key: string, value: string | number | boolean) => {
+    update({
+      componentProps: {
+        ...(node.props.componentProps ?? {}),
+        [key]: value,
+      },
+    })
+  }
 
   return (
     <aside className="properties panel">
@@ -71,7 +85,48 @@ export function PropertiesPanel() {
             </Field>
           </>
         )}
+        {node.type === 'component' && (
+          <>
+            <Field label="Component">
+              <input value={projectComponent?.name ?? 'Missing component'} readOnly />
+            </Field>
+            <Field label="Import">
+              <input value={projectComponent?.importPath ?? ''} readOnly />
+            </Field>
+          </>
+        )}
       </div>
+
+      {node.type === 'component' && (
+        <div className="inspector-group">
+          <div className="group-heading">Component Props</div>
+          {Object.entries(node.props.componentProps ?? {}).length ? (
+            Object.entries(node.props.componentProps ?? {}).map(([key, value]) => (
+              <Field key={key} label={key}>
+                {typeof value === 'boolean' ? (
+                  <select
+                    value={String(value)}
+                    onChange={(event) => updateComponentProp(key, event.target.value === 'true')}
+                  >
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                ) : typeof value === 'number' ? (
+                  <input
+                    type="number"
+                    value={value}
+                    onChange={(event) => updateComponentProp(key, Number(event.target.value))}
+                  />
+                ) : (
+                  <input value={value} onChange={(event) => updateComponentProp(key, event.target.value)} />
+                )}
+              </Field>
+            ))
+          ) : (
+            <p className="inspector-note">This component has no registered default props.</p>
+          )}
+        </div>
+      )}
 
       {node.type === 'container' && (
         <div className="inspector-group">
