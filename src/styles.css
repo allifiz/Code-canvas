@@ -491,3 +491,96 @@ body.is-resizing * {
   white-space: pre-wrap;
 }
 .canvas-node.editing-text { cursor: text; }
+
+
+/* selection manipulation */
+.workspace.pan-ready .canvas-scroll { cursor: grab; }
+.workspace.panning .canvas-scroll { cursor: grabbing; }
+.workspace.panning .canvas-scroll * { cursor: grabbing !important; }
+
+.canvas-node.selected {
+  outline: 2px solid #7165f0;
+  outline-offset: 2px;
+}
+.canvas-node.selected:not(.locked) > .node-tag { display: block; }
+
+.layer-entry {
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+}
+.layer-entry.dragging { opacity: .45; }
+.layer-drag-handle {
+  width: 22px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #484e59;
+  font-size: 9px;
+  cursor: grab;
+}
+.layer-drag-handle:hover { background: #30333b; color: #9ea4b0; }
+.layer-entry.is-locked .layer-drag-handle { cursor: not-allowed; opacity: .3; }
+.layer-drop-zone {
+  height: 4px;
+  margin-right: 7px;
+  border-radius: 999px;
+  transition: background .08s ease, height .08s ease;
+}
+.layer-drop-zone.active {
+  height: 6px;
+  background: #7367ef;
+  box-shadow: 0 0 0 1px #9b92ff55;
+}
+
+.multi-selection-panel {
+  display: grid;
+  place-items: center;
+  padding: 28px 18px;
+  text-align: center;
+}
+.multi-selection-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 12px;
+  border: 1px solid #343741;
+  border-radius: 12px;
+  background: #1a1c22;
+  color: #8c82f5;
+  font-size: 14px;
+  letter-spacing: -3px;
+}
+.multi-selection-panel strong { color: #e7e9ee; font-size: 12px; }
+.multi-selection-panel > p {
+  max-width: 220px;
+  margin: 7px 0 15px;
+  color: #6c7280;
+  font-size: 9px;
+  line-height: 1.55;
+}
+.multi-selection-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.multi-selection-actions button { min-height: 32px; font-size: 9px; }
+.multi-selection-list {
+  width: 100%;
+  margin-top: 16px;
+  border-top: 1px solid #25282f;
+}
+.multi-selection-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  border-bottom: 1px solid #202229;
+  color: #969ca8;
+  font-size: 9px;
+  text-align: left;
+}
+.multi-selection-list code { color: #555b68; font-size: 8px; }
