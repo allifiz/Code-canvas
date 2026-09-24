@@ -483,7 +483,7 @@ const styleKeys: Array<keyof NodeProps> = [
   'display', 'direction', 'align', 'justify', 'gap', 'gridColumns', 'overflow',
   'width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight',
   'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-  'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+  'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'translateX', 'translateY',
   'background', 'color', 'opacity',
   'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing',
   'textAlign', 'textTransform', 'textDecoration',
@@ -495,6 +495,7 @@ const styleKeys: Array<keyof NodeProps> = [
 
 interface EditorState extends CanvasDocument {
   selectedId: string | null
+  selectedIds: string[]
   viewport: Viewport
   zoom: number
   showGrid: boolean
@@ -524,7 +525,11 @@ interface EditorState extends CanvasDocument {
   renameNode: (nodeId: string, name: string) => void
   toggleNodeVisibility: (nodeId: string) => void
   toggleNodeLock: (nodeId: string) => void
-  selectNode: (nodeId: string | null) => void
+  selectNode: (nodeId: string | null, additive?: boolean) => void
+  clearSelection: () => void
+  groupSelected: () => void
+  ungroupSelected: () => void
+  nudgeSelected: (dx: number, dy: number) => void
   setViewport: (viewport: Viewport) => void
   setZoom: (zoom: number) => void
   toggleGrid: () => void
@@ -613,13 +618,14 @@ const attachSubtree = (
       ...parent,
       children: insertAt(parent.children, rootId, index),
     }
-    return { nodes, selectedId: rootId, ...history }
+    return { nodes, selectedId: rootId, selectedIds: [rootId], ...history }
   }
 
   return {
     nodes,
     rootIds: insertAt(state.rootIds, rootId, index),
     selectedId: rootId,
+    selectedIds: [rootId],
     ...history,
   }
 }
@@ -638,6 +644,7 @@ export const useEditorStore = create<EditorState>()(
     (set, get) => ({
       ...demo,
       selectedId: demo.rootIds[0],
+      selectedIds: demo.rootIds.length ? [demo.rootIds[0]] : [],
       viewport: 'desktop',
       zoom: 0.8,
       showGrid: true,
@@ -737,6 +744,7 @@ export const useEditorStore = create<EditorState>()(
             nodes,
             rootIds,
             selectedId: nodeId,
+            selectedIds: [nodeId],
             ...pushHistory(current),
           }
         })
@@ -776,6 +784,7 @@ export const useEditorStore = create<EditorState>()(
             nodes,
             rootIds: state.rootIds.filter((id) => !toDelete.has(id)),
             selectedId: toDelete.has(state.selectedId ?? '') ? null : state.selectedId,
+            selectedIds: state.selectedIds.filter((id) => !toDelete.has(id)),
             ...pushHistory(state),
           }
         }),
@@ -798,6 +807,7 @@ export const useEditorStore = create<EditorState>()(
             return {
               nodes,
               selectedId: cloned.rootId,
+              selectedIds: [cloned.rootId],
               ...pushHistory(state),
             }
           }
@@ -807,6 +817,7 @@ export const useEditorStore = create<EditorState>()(
             nodes,
             rootIds: insertAt(state.rootIds, cloned.rootId, sourceIndex + 1),
             selectedId: cloned.rootId,
+            selectedIds: [cloned.rootId],
             ...pushHistory(state),
           }
         }),
@@ -863,6 +874,7 @@ export const useEditorStore = create<EditorState>()(
               [nodeId]: { ...node, visible: node.visible === false ? true : false },
             },
             selectedId: state.selectedId === nodeId && node.visible !== false ? null : state.selectedId,
+            selectedIds: node.visible !== false ? state.selectedIds.filter((id) => id !== nodeId) : state.selectedIds,
           }
         }),
 
@@ -878,7 +890,163 @@ export const useEditorStore = create<EditorState>()(
           }
         }),
 
-      selectNode: (selectedId) => set({ selectedId }),
+      selectNode: (nodeId, additive = false) =>
+        set((state) => {
+          if (!nodeId) return { selectedId: null, selectedIds: [] }
+
+          if (!additive) {
+            return { selectedId: nodeId, selectedIds: [nodeId] }
+          }
+
+          const exists = state.selectedIds.includes(nodeId)
+          const selectedIds = exists
+            ? state.selectedIds.filter((id) => id !== nodeId)
+            : [...state.selectedIds, nodeId]
+
+          return {
+            selectedIds,
+            selectedId: exists
+              ? selectedIds.at(-1) ?? null
+              : nodeId,
+          }
+        }),
+
+      clearSelection: () => set({ selectedId: null, selectedIds: [] }),
+
+      groupSelected: () =>
+        set((state) => {
+          const selected = state.selectedIds.filter((id) => state.nodes[id] && !state.nodes[id].locked)
+          if (selected.length < 2) return state
+
+          const parentOf = (nodeId: string) =>
+            state.rootIds.includes(nodeId)
+              ? null
+              : Object.values(state.nodes).find((node) => node.children.includes(nodeId))?.id ?? null
+
+          const parentIds = selected.map(parentOf)
+          const parentId = parentIds[0]
+          if (parentIds.some((id) => id !== parentId)) return state
+
+          const siblings = parentId ? state.nodes[parentId]?.children ?? [] : state.rootIds
+          const ordered = selected
+            .map((id) => ({ id, index: siblings.indexOf(id) }))
+            .filter((item) => item.index >= 0)
+            .sort((a, b) => a.index - b.index)
+
+          if (ordered.length < 2) return state
+
+          const group = makeNode('container')
+          group.name = 'Group'
+          const parent = parentId ? state.nodes[parentId] : undefined
+          group.props = {
+            ...group.props,
+            direction:
+              parent?.type === 'container' && parent.props.display === 'flex'
+                ? parent.props.direction ?? 'column'
+                : 'column',
+            gap: 0,
+            padding: 0,
+            width:
+              parent?.type === 'container' && parent.props.direction === 'row'
+                ? 'auto'
+                : '100%',
+            minHeight: 0,
+            background: 'transparent',
+            borderWidth: 0,
+            radius: 0,
+          }
+          group.children = ordered.map((item) => item.id)
+
+          const nodes = { ...state.nodes, [group.id]: group }
+          const selectedSet = new Set(group.children)
+          const nextSiblings = siblings.filter((id) => !selectedSet.has(id))
+          nextSiblings.splice(ordered[0].index, 0, group.id)
+
+          if (parentId) {
+            nodes[parentId] = {
+              ...nodes[parentId],
+              children: nextSiblings,
+            }
+
+            return {
+              nodes,
+              selectedId: group.id,
+              selectedIds: [group.id],
+              ...pushHistory(state),
+            }
+          }
+
+          return {
+            nodes,
+            rootIds: nextSiblings,
+            selectedId: group.id,
+            selectedIds: [group.id],
+            ...pushHistory(state),
+          }
+        }),
+
+      ungroupSelected: () =>
+        set((state) => {
+          const nodeId = state.selectedId
+          if (!nodeId) return state
+          const group = state.nodes[nodeId]
+          if (!group || group.type !== 'container' || !group.children.length || group.locked) return state
+
+          const parent = Object.values(state.nodes).find((node) => node.children.includes(nodeId))
+          const nodes = { ...state.nodes }
+          delete nodes[nodeId]
+
+          if (parent) {
+            const index = parent.children.indexOf(nodeId)
+            const children = parent.children.filter((id) => id !== nodeId)
+            children.splice(index, 0, ...group.children)
+            nodes[parent.id] = { ...nodes[parent.id], children }
+
+            return {
+              nodes,
+              selectedId: group.children[0] ?? null,
+              selectedIds: [...group.children],
+              ...pushHistory(state),
+            }
+          }
+
+          const index = state.rootIds.indexOf(nodeId)
+          const rootIds = state.rootIds.filter((id) => id !== nodeId)
+          rootIds.splice(index, 0, ...group.children)
+
+          return {
+            nodes,
+            rootIds,
+            selectedId: group.children[0] ?? null,
+            selectedIds: [...group.children],
+            ...pushHistory(state),
+          }
+        }),
+
+      nudgeSelected: (dx, dy) =>
+        set((state) => {
+          const selected = state.selectedIds.filter((id) => state.nodes[id] && !state.nodes[id].locked)
+          if (!selected.length) return state
+
+          const nodes = { ...state.nodes }
+          for (const id of selected) {
+            const node = nodes[id]
+            nodes[id] = {
+              ...node,
+              props: {
+                ...node.props,
+                translateX: (node.props.translateX ?? 0) + dx,
+                translateY: (node.props.translateY ?? 0) + dy,
+              },
+            }
+          }
+
+          return {
+            nodes,
+            ...pushHistory(state),
+          }
+        }),
+
       setViewport: (viewport) => set({ viewport }),
       setZoom: (zoom) => set({ zoom: Math.min(2, Math.max(0.25, zoom)) }),
       toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
@@ -889,6 +1057,7 @@ export const useEditorStore = create<EditorState>()(
           return {
             ...next,
             selectedId: next.rootIds[0],
+            selectedIds: next.rootIds.length ? [next.rootIds[0]] : [],
             ...pushHistory(state),
           }
         }),
@@ -898,6 +1067,7 @@ export const useEditorStore = create<EditorState>()(
           nodes: structuredClone(document.nodes),
           rootIds: [...document.rootIds],
           selectedId: null,
+          selectedIds: [],
           ...pushHistory(state),
         })),
 
@@ -915,6 +1085,7 @@ export const useEditorStore = create<EditorState>()(
           nodes: {},
           rootIds: [],
           selectedId: null,
+          selectedIds: [],
           ...pushHistory(state),
         })),
 
@@ -926,6 +1097,7 @@ export const useEditorStore = create<EditorState>()(
           return {
             ...previous,
             selectedId: null,
+            selectedIds: [],
             past: state.past.slice(0, -1),
             future: [snapshot(state), ...state.future].slice(0, 50),
           }
@@ -939,6 +1111,7 @@ export const useEditorStore = create<EditorState>()(
           return {
             ...next,
             selectedId: null,
+            selectedIds: [],
             past: [...state.past, snapshot(state)].slice(-50),
             future: state.future.slice(1),
           }
