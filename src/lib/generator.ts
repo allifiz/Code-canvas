@@ -184,7 +184,7 @@ function renderNode(
       if (!node.children.length) return `${pad}<div${classAttr}${styleAttr} />`
       const children = node.children
         .map((childId) => nodes[childId])
-        .filter(Boolean)
+        .filter((child): child is CanvasNode => !!child && child.visible !== false)
         .map((child) => renderNode(child, nodes, projectComponents, level + 1))
         .join('\n')
       return `${pad}<div${classAttr}${styleAttr}>\n${children}\n${pad}</div>`
@@ -265,7 +265,7 @@ export function generateReactCode(
 
   const body = rootIds
     .map((id) => nodes[id])
-    .filter(Boolean)
+    .filter((node): node is CanvasNode => !!node && node.visible !== false)
     .map((node) => renderNode(node, nodes, projectComponents, 3))
     .join('\n')
 
@@ -389,7 +389,7 @@ function renderHtmlNode(
     case 'container': {
       const children = node.children
         .map((childId) => nodes[childId])
-        .filter(Boolean)
+        .filter((child): child is CanvasNode => !!child && child.visible !== false)
         .map((child) => renderHtmlNode(child, nodes, projectComponents, level + 1))
         .join('\n')
 
@@ -445,7 +445,7 @@ export function generateHtmlCode(
   const styles = orderedNodes.map(cssRules).join('\n\n')
   const body = rootIds
     .map((id) => nodes[id])
-    .filter(Boolean)
+    .filter((node): node is CanvasNode => !!node && node.visible !== false)
     .map((node) => renderHtmlNode(node, nodes, projectComponents, 2))
     .join('\n')
 
