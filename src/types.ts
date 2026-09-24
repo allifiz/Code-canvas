@@ -53,6 +53,8 @@ export interface NodeProps {
   marginRight?: number
   marginBottom?: number
   marginLeft?: number
+  translateX?: number
+  translateY?: number
 
   background?: string
   color?: string
