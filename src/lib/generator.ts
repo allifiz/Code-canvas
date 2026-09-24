@@ -1,4 +1,9 @@
-import type { CanvasNode, NodeProps } from '../types'
+import type {
+  CanvasNode,
+  ComponentPropValue,
+  NodeProps,
+  ProjectComponentDefinition,
+} from '../types'
 
 const indent = (level: number) => '  '.repeat(level)
 const quote = (value = '') => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -49,7 +54,17 @@ function classes(props: NodeProps, type: CanvasNode['type']) {
   return result.join(' ')
 }
 
-function renderNode(node: CanvasNode, nodes: Record<string, CanvasNode>, level: number): string {
+function renderComponentProp(key: string, value: ComponentPropValue) {
+  if (typeof value === 'string') return `${key}="${quote(value)}"`
+  return `${key}={${JSON.stringify(value)}}`
+}
+
+function renderNode(
+  node: CanvasNode,
+  nodes: Record<string, CanvasNode>,
+  projectComponents: ProjectComponentDefinition[],
+  level: number,
+): string {
   const pad = indent(level)
   const className = classes(node.props, node.type)
   const classAttr = className ? ` className="${className}"` : ''
@@ -60,7 +75,7 @@ function renderNode(node: CanvasNode, nodes: Record<string, CanvasNode>, level: 
       const children = node.children
         .map((childId) => nodes[childId])
         .filter(Boolean)
-        .map((child) => renderNode(child, nodes, level + 1))
+        .map((child) => renderNode(child, nodes, projectComponents, level + 1))
         .join('\n')
       return `${pad}<div${classAttr}>\n${children}\n${pad}</div>`
     }
@@ -72,19 +87,66 @@ function renderNode(node: CanvasNode, nodes: Record<string, CanvasNode>, level: 
       return `${pad}<input placeholder="${quote(node.props.placeholder)}"${classAttr} />`
     case 'image':
       return `${pad}<img src="${quote(node.props.src)}" alt="${quote(node.props.alt)}"${classAttr} />`
+    case 'component': {
+      const component = projectComponents.find((item) => item.id === node.props.componentId)
+      if (!component) return `${pad}{/* Missing project component: ${node.props.componentId ?? 'unknown'} */}`
+
+      const props = Object.entries(node.props.componentProps ?? {})
+        .map(([key, value]) => renderComponentProp(key, value))
+        .join(' ')
+      const propAttr = props ? ` ${props}` : ''
+
+      if (!component.acceptsChildren || !node.children.length) {
+        return `${pad}<${component.name}${propAttr} />`
+      }
+
+      const children = node.children
+        .map((childId) => nodes[childId])
+        .filter(Boolean)
+        .map((child) => renderNode(child, nodes, projectComponents, level + 1))
+        .join('\n')
+
+      return `${pad}<${component.name}${propAttr}>\n${children}\n${pad}</${component.name}>`
+    }
   }
 }
 
-export function generateReactCode(nodes: Record<string, CanvasNode>, rootIds: string[]) {
+function componentImport(component: ProjectComponentDefinition) {
+  if (!component.exportName) {
+    return `import ${component.name} from "${quote(component.importPath)}"`
+  }
+
+  const alias = component.exportName === component.name ? '' : ` as ${component.name}`
+  return `import { ${component.exportName}${alias} } from "${quote(component.importPath)}"`
+}
+
+export function generateReactCode(
+  nodes: Record<string, CanvasNode>,
+  rootIds: string[],
+  projectComponents: ProjectComponentDefinition[] = [],
+) {
+  const usedComponentIds = new Set(
+    Object.values(nodes)
+      .filter((node) => node.type === 'component' && node.props.componentId)
+      .map((node) => node.props.componentId as string),
+  )
+
+  const imports = projectComponents
+    .filter((component) => usedComponentIds.has(component.id))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(componentImport)
+    .join('\n')
+
   const body = rootIds
     .map((id) => nodes[id])
     .filter(Boolean)
-    .map((node) => renderNode(node, nodes, 3))
+    .map((node) => renderNode(node, nodes, projectComponents, 3))
     .join('\n')
 
-  return `export default function GeneratedPage() {\n  return (\n    <>\n${body || '      {/* Drag something onto the canvas first. */}'}\n    </>\n  )\n}\n`
-}
+  const importBlock = imports ? `${imports}\n\n` : ''
 
+  return `${importBlock}export default function GeneratedPage() {\n  return (\n    <>\n${body || '      {/* Drag something onto the canvas first. */}'}\n    </>\n  )\n}\n`
+}
 
 const escapeHtml = (value = '') =>
   value
@@ -103,9 +165,7 @@ function htmlClass(node: CanvasNode) {
 
 function cssRules(node: CanvasNode) {
   const p = node.props
-  const declarations: string[] = [
-    'box-sizing: border-box',
-  ]
+  const declarations: string[] = ['box-sizing: border-box']
 
   const width = cssValue(p.width, '')
   const minHeight = cssValue(p.minHeight)
@@ -138,11 +198,17 @@ function cssRules(node: CanvasNode) {
   if (node.type === 'button') declarations.push('border: 0', 'cursor: pointer')
   if (node.type === 'image') declarations.push('display: block', 'object-fit: cover')
   if (node.type === 'input') declarations.push('display: block')
+  if (node.type === 'component') declarations.push('border: 1px dashed #94a3b8', 'padding: 12px')
 
   return `.${htmlClass(node)} {\n${declarations.map((item) => `  ${item};`).join('\n')}\n}`
 }
 
-function renderHtmlNode(node: CanvasNode, nodes: Record<string, CanvasNode>, level: number): string {
+function renderHtmlNode(
+  node: CanvasNode,
+  nodes: Record<string, CanvasNode>,
+  projectComponents: ProjectComponentDefinition[],
+  level: number,
+): string {
   const pad = indent(level)
   const className = htmlClass(node)
 
@@ -151,7 +217,7 @@ function renderHtmlNode(node: CanvasNode, nodes: Record<string, CanvasNode>, lev
       const children = node.children
         .map((childId) => nodes[childId])
         .filter(Boolean)
-        .map((child) => renderHtmlNode(child, nodes, level + 1))
+        .map((child) => renderHtmlNode(child, nodes, projectComponents, level + 1))
         .join('\n')
 
       if (!children) return `${pad}<div class="${className}"></div>`
@@ -165,16 +231,35 @@ function renderHtmlNode(node: CanvasNode, nodes: Record<string, CanvasNode>, lev
       return `${pad}<input class="${className}" placeholder="${escapeHtml(node.props.placeholder)}" />`
     case 'image':
       return `${pad}<img class="${className}" src="${escapeHtml(node.props.src)}" alt="${escapeHtml(node.props.alt)}" />`
+    case 'component': {
+      const component = projectComponents.find((item) => item.id === node.props.componentId)
+      const name = component?.name ?? 'MissingComponent'
+      const children = node.children
+        .map((childId) => nodes[childId])
+        .filter(Boolean)
+        .map((child) => renderHtmlNode(child, nodes, projectComponents, level + 1))
+        .join('\n')
+
+      if (!children) {
+        return `${pad}<div class="${className}" data-codecanvas-component="${escapeHtml(name)}">${escapeHtml(name)}</div>`
+      }
+
+      return `${pad}<div class="${className}" data-codecanvas-component="${escapeHtml(name)}">\n${indent(level + 1)}<!-- React component placeholder: ${escapeHtml(name)} -->\n${children}\n${pad}</div>`
+    }
   }
 }
 
-export function generateHtmlCode(nodes: Record<string, CanvasNode>, rootIds: string[]) {
+export function generateHtmlCode(
+  nodes: Record<string, CanvasNode>,
+  rootIds: string[],
+  projectComponents: ProjectComponentDefinition[] = [],
+) {
   const orderedNodes = Object.values(nodes)
   const styles = orderedNodes.map(cssRules).join('\n\n')
   const body = rootIds
     .map((id) => nodes[id])
     .filter(Boolean)
-    .map((node) => renderHtmlNode(node, nodes, 2))
+    .map((node) => renderHtmlNode(node, nodes, projectComponents, 2))
     .join('\n')
 
   return `<!doctype html>
