@@ -1,10 +1,37 @@
 import { useRef, type ChangeEvent } from 'react'
-import type { CanvasDocument, CanvasNode, Viewport } from '../types'
+import type {
+  CanvasDocument,
+  CanvasNode,
+  CodeCanvasProject,
+  ComponentPropValue,
+  ProjectComponentDefinition,
+  Viewport,
+} from '../types'
 import { useEditorStore } from '../store'
 
-type CodeCanvasFile = {
+type LegacyCodeCanvasFile = {
   version: 1
   document: CanvasDocument
+}
+
+const isComponentPropValue = (value: unknown): value is ComponentPropValue =>
+  typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+
+const isProjectComponent = (value: unknown): value is ProjectComponentDefinition => {
+  if (!value || typeof value !== 'object') return false
+  const component = value as Partial<ProjectComponentDefinition>
+
+  return (
+    typeof component.id === 'string' &&
+    typeof component.name === 'string' &&
+    typeof component.importPath === 'string' &&
+    (component.exportName === undefined || typeof component.exportName === 'string') &&
+    typeof component.acceptsChildren === 'boolean' &&
+    !!component.defaultProps &&
+    typeof component.defaultProps === 'object' &&
+    !Array.isArray(component.defaultProps) &&
+    Object.values(component.defaultProps).every(isComponentPropValue)
+  )
 }
 
 const isCanvasNode = (value: unknown): value is CanvasNode => {
@@ -13,7 +40,7 @@ const isCanvasNode = (value: unknown): value is CanvasNode => {
 
   return (
     typeof node.id === 'string' &&
-    ['container', 'text', 'button', 'input', 'image'].includes(node.type ?? '') &&
+    ['container', 'text', 'button', 'input', 'image', 'component'].includes(node.type ?? '') &&
     !!node.props &&
     typeof node.props === 'object' &&
     Array.isArray(node.children) &&
@@ -53,11 +80,31 @@ const isCanvasDocument = (value: unknown): value is CanvasDocument => {
   return !Object.keys(document.nodes).some(hasCycle)
 }
 
+const isCodeCanvasProject = (value: unknown): value is CodeCanvasProject => {
+  if (!value || typeof value !== 'object') return false
+  const project = value as Partial<CodeCanvasProject>
+
+  if (project.version !== 2 || !isCanvasDocument(project.document) || !Array.isArray(project.projectComponents)) {
+    return false
+  }
+
+  if (!project.projectComponents.every(isProjectComponent)) return false
+
+  const componentIds = new Set(project.projectComponents.map((component) => component.id))
+
+  return Object.values(project.document.nodes).every(
+    (node) =>
+      node.type !== 'component' ||
+      (typeof node.props.componentId === 'string' && componentIds.has(node.props.componentId)),
+  )
+}
+
 export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
   const viewport = useEditorStore((state) => state.viewport)
   const setViewport = useEditorStore((state) => state.setViewport)
   const loadDemo = useEditorStore((state) => state.loadDemo)
   const loadDocument = useEditorStore((state) => state.loadDocument)
+  const loadProject = useEditorStore((state) => state.loadProject)
   const clearCanvas = useEditorStore((state) => state.clearCanvas)
   const undo = useEditorStore((state) => state.undo)
   const redo = useEditorStore((state) => state.redo)
@@ -65,6 +112,7 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
   const canRedo = useEditorStore((state) => state.future.length > 0)
   const nodes = useEditorStore((state) => state.nodes)
   const rootIds = useEditorStore((state) => state.rootIds)
+  const projectComponents = useEditorStore((state) => state.projectComponents)
   const importInputRef = useRef<HTMLInputElement>(null)
 
   const presets: Array<{ value: Viewport; label: string }> = [
@@ -74,9 +122,10 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
   ]
 
   const exportDocument = () => {
-    const payload: CodeCanvasFile = {
-      version: 1,
+    const payload: CodeCanvasProject = {
+      version: 2,
       document: { nodes, rootIds },
+      projectComponents,
     }
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
@@ -95,16 +144,28 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
 
     try {
       const parsed = JSON.parse(await file.text()) as unknown
-      const candidate =
-        parsed && typeof parsed === 'object' && 'document' in parsed
-          ? (parsed as Partial<CodeCanvasFile>).document
-          : parsed
 
-      if (!isCanvasDocument(candidate)) {
-        throw new Error('Invalid CodeCanvas document')
+      if (isCodeCanvasProject(parsed)) {
+        loadProject(parsed.document, parsed.projectComponents)
+        return
       }
 
-      loadDocument(candidate)
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        'document' in parsed &&
+        isCanvasDocument((parsed as Partial<LegacyCodeCanvasFile>).document)
+      ) {
+        loadDocument((parsed as LegacyCodeCanvasFile).document)
+        return
+      }
+
+      if (isCanvasDocument(parsed)) {
+        loadDocument(parsed)
+        return
+      }
+
+      throw new Error('Invalid CodeCanvas document')
     } catch {
       window.alert('Could not import this file. Choose a valid CodeCanvas JSON document.')
     }
@@ -115,7 +176,7 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
       <div className="brand">
         <span className="brand-mark">C</span>
         <span>CodeCanvas</span>
-        <small>v0.1</small>
+        <small>v0.2</small>
       </div>
 
       <div className="viewport-switcher" aria-label="Canvas viewport">
