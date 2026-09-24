@@ -11,8 +11,11 @@ CodeCanvas is a source-code-first visual UI builder. Instead of treating the can
 - Move existing nodes between containers
 - Reorder siblings with positional drag-and-drop
 - Undo / redo with keyboard shortcuts
-- Import and export CodeCanvas JSON documents
-- Edit layout and visual properties
+- Import and export versioned CodeCanvas project JSON
+- Register project React components and drag them onto the canvas
+- Generate imports and JSX for registered project components
+- Scan React component folders into an importable manifest
+- Edit layout, component props, and visual properties
 - Switch desktop, tablet, and mobile canvas widths
 - Persist the current document locally
 - Export readable React + Tailwind or standalone HTML + CSS
@@ -67,6 +70,40 @@ npm run build
 
 Use **Export** to save the current canvas as a versioned CodeCanvas JSON file, then **Import** to restore it later or move it to another browser.
 
+## Project components
+
+CodeCanvas can reference components that already exist in your React project.
+
+You can register them manually in the **Project Components** panel with:
+
+- Local component name, for example `Button`
+- Import path, for example `@/components/ui/button`
+- Named export when applicable
+- Flat default props
+- Whether the component accepts children
+
+Generated React code keeps the registered import instead of replacing the component with generic HTML.
+
+### Scan a component folder
+
+Generate a component manifest with:
+
+```bash
+npm run scan:components
+```
+
+By default this scans `src/components` and writes `codecanvas.components.json`.
+
+Custom paths are supported:
+
+```bash
+npm run scan:components -- --dir src/ui --out codecanvas.components.json
+```
+
+Then use **Project Components → Import** inside CodeCanvas.
+
+The scanner currently detects exported PascalCase components from `.tsx` and `.jsx` files. Children support is inferred heuristically and can be adjusted manually after import.
+
 ## Current component palette
 
 - Container
@@ -85,7 +122,10 @@ Use **Export** to save the current canvas as a versioned CodeCanvas JSON file, t
 - [x] Local persistence
 - [x] Reorder siblings with drag and drop
 - [x] Undo / redo
-- [ ] Import project React components
+- [x] Project component registry
+- [x] React component manifest scanner
+- [x] Generate imports for project components
+- [ ] Automatically sync project components through a dev server/CLI bridge
 - [ ] Parse existing JSX into the CodeCanvas schema
 - [ ] Two-way visual/code editing
 - [ ] Vue generator
