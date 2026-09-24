@@ -421,3 +421,73 @@ body.is-resizing,
 body.is-resizing * {
   user-select: none !important;
 }
+
+
+/* layer metadata and inline editing */
+.layer-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 29px;
+  padding-right: 5px;
+  color: #8d929f;
+}
+.layer-entry.active { background: #28243d; color: #e8e5ff; }
+.layer-entry.is-hidden { opacity: .48; }
+.layer-entry.is-locked .layer-name { color: #737987; }
+.layer-entry .layer-row {
+  min-width: 0;
+  width: 100%;
+  height: 29px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 5px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.layer-entry .layer-row:hover { background: transparent; }
+.layer-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.layer-name-input {
+  min-width: 0;
+  width: 100%;
+  height: 22px;
+  padding: 2px 5px;
+  border: 1px solid #6558da;
+  border-radius: 4px;
+  outline: 0;
+  background: #111216;
+  color: #e6e7eb;
+  font-size: 10px;
+}
+.layer-actions { display: none; align-items: center; gap: 1px; }
+.layer-entry:hover .layer-actions,
+.layer-entry.active .layer-actions,
+.layer-entry.is-hidden .layer-actions,
+.layer-entry.is-locked .layer-actions { display: flex; }
+.layer-actions button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #5f6571;
+  font-size: 9px;
+}
+.layer-actions button:hover { background: #343741; color: #d9dce3; }
+.layer-actions button.active { color: #aa9fff; }
+.layer-actions button.muted { color: #424752; }
+
+.canvas-node.locked { cursor: default; }
+.canvas-node.locked.selected { outline-style: dashed; outline-color: #7d8390; }
+.canvas-node.locked > .node-tag { background: #5c626d; }
+.canvas-inline-text-editor {
+  outline: 2px solid #6558e8;
+  outline-offset: 2px;
+  cursor: text;
+  white-space: pre-wrap;
+}
+.canvas-node.editing-text { cursor: text; }
