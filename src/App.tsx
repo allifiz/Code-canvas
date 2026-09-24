@@ -67,7 +67,7 @@ export default function App() {
         : undefined
 
     if (source?.source === 'palette') {
-      addNode(source.type as NodeType, targetParent, targetIndex)
+      addNode(source.type as Exclude<NodeType, 'component'>, targetParent, targetIndex)
     }
 
     if (source?.source === 'project-component') {
