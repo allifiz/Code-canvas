@@ -119,9 +119,13 @@ function createDemoDocument(): CanvasDocument {
   }
 }
 
+type DocumentSnapshot = CanvasDocument
+
 interface EditorState extends CanvasDocument {
   selectedId: string | null
   viewport: Viewport
+  past: DocumentSnapshot[]
+  future: DocumentSnapshot[]
   addNode: (type: NodeType, parentId: string | null) => string
   moveNode: (nodeId: string, parentId: string | null) => void
   updateNode: (nodeId: string, props: Partial<NodeProps>) => void
@@ -130,6 +134,8 @@ interface EditorState extends CanvasDocument {
   setViewport: (viewport: Viewport) => void
   loadDemo: () => void
   clearCanvas: () => void
+  undo: () => void
+  redo: () => void
 }
 
 function collectDescendants(nodes: Record<string, CanvasNode>, nodeId: string, bag = new Set<string>()) {
@@ -142,6 +148,16 @@ function collectDescendants(nodes: Record<string, CanvasNode>, nodeId: string, b
   return bag
 }
 
+const snapshot = (state: Pick<EditorState, 'nodes' | 'rootIds'>): DocumentSnapshot => ({
+  nodes: structuredClone(state.nodes),
+  rootIds: [...state.rootIds],
+})
+
+const pushHistory = (state: EditorState) => ({
+  past: [...state.past, snapshot(state)].slice(-50),
+  future: [],
+})
+
 const demo = createDemoDocument()
 
 export const useEditorStore = create<EditorState>()(
@@ -150,19 +166,29 @@ export const useEditorStore = create<EditorState>()(
       ...demo,
       selectedId: demo.rootIds[0],
       viewport: 'desktop',
+      past: [],
+      future: [],
 
       addNode: (type, parentId) => {
         const node = makeNode(type)
         set((state) => {
           const nodes = { ...state.nodes, [node.id]: node }
+          const history = pushHistory(state)
+
           if (parentId && nodes[parentId]?.type === 'container') {
             nodes[parentId] = {
               ...nodes[parentId],
               children: [...nodes[parentId].children, node.id],
             }
-            return { nodes, selectedId: node.id }
+            return { nodes, selectedId: node.id, ...history }
           }
-          return { nodes, rootIds: [...state.rootIds, node.id], selectedId: node.id }
+
+          return {
+            nodes,
+            rootIds: [...state.rootIds, node.id],
+            selectedId: node.id,
+            ...history,
+          }
         })
         return node.id
       },
@@ -193,7 +219,12 @@ export const useEditorStore = create<EditorState>()(
             rootIds = [...rootIds, nodeId]
           }
 
-          return { nodes, rootIds, selectedId: nodeId }
+          return {
+            nodes,
+            rootIds,
+            selectedId: nodeId,
+            ...pushHistory(current),
+          }
         })
       },
 
@@ -201,17 +232,20 @@ export const useEditorStore = create<EditorState>()(
         set((state) => {
           const node = state.nodes[nodeId]
           if (!node) return state
+
           return {
             nodes: {
               ...state.nodes,
               [nodeId]: { ...node, props: { ...node.props, ...props } },
             },
+            ...pushHistory(state),
           }
         }),
 
       deleteNode: (nodeId) =>
         set((state) => {
           if (!state.nodes[nodeId]) return state
+
           const toDelete = collectDescendants(state.nodes, nodeId)
           toDelete.add(nodeId)
           const nodes = { ...state.nodes }
@@ -228,16 +262,56 @@ export const useEditorStore = create<EditorState>()(
             nodes,
             rootIds: state.rootIds.filter((id) => !toDelete.has(id)),
             selectedId: toDelete.has(state.selectedId ?? '') ? null : state.selectedId,
+            ...pushHistory(state),
           }
         }),
 
       selectNode: (selectedId) => set({ selectedId }),
       setViewport: (viewport) => set({ viewport }),
-      loadDemo: () => {
-        const next = createDemoDocument()
-        set({ ...next, selectedId: next.rootIds[0] })
-      },
-      clearCanvas: () => set({ nodes: {}, rootIds: [], selectedId: null }),
+
+      loadDemo: () =>
+        set((state) => {
+          const next = createDemoDocument()
+          return {
+            ...next,
+            selectedId: next.rootIds[0],
+            ...pushHistory(state),
+          }
+        }),
+
+      clearCanvas: () =>
+        set((state) => ({
+          nodes: {},
+          rootIds: [],
+          selectedId: null,
+          ...pushHistory(state),
+        })),
+
+      undo: () =>
+        set((state) => {
+          const previous = state.past.at(-1)
+          if (!previous) return state
+
+          return {
+            ...previous,
+            selectedId: null,
+            past: state.past.slice(0, -1),
+            future: [snapshot(state), ...state.future].slice(0, 50),
+          }
+        }),
+
+      redo: () =>
+        set((state) => {
+          const next = state.future[0]
+          if (!next) return state
+
+          return {
+            ...next,
+            selectedId: null,
+            past: [...state.past, snapshot(state)].slice(-50),
+            future: state.future.slice(1),
+          }
+        }),
     }),
     {
       name: 'codecanvas-document-v1',
