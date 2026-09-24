@@ -1,5 +1,5 @@
-import { useDraggable } from '@dnd-kit/core'
-import { useRef, useState, type ChangeEvent } from 'react'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
+import { Fragment, useRef, useState, type ChangeEvent } from 'react'
 import type {
   ComponentPropValue,
   NodeType,
@@ -170,9 +170,65 @@ function ProjectComponentForm({ onDone }: { onDone: () => void }) {
   )
 }
 
-function LayerNode({ id, depth = 0 }: { id: string; depth?: number }) {
+function LayerDropZone({
+  parentId,
+  index,
+  depth,
+}: {
+  parentId: string | null
+  index: number
+  depth: number
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `layer-insert-${parentId ?? 'root'}-${index}`,
+    data: { parentId, index, kind: 'layer-insert' },
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`layer-drop-zone ${isOver ? 'active' : ''}`}
+      style={{ marginLeft: 10 + depth * 14 }}
+      aria-hidden="true"
+    />
+  )
+}
+
+function LayerChildren({
+  ids,
+  parentId,
+  depth,
+}: {
+  ids: string[]
+  parentId: string | null
+  depth: number
+}) {
+  return (
+    <>
+      {ids.map((id, index) => (
+        <Fragment key={id}>
+          <LayerDropZone parentId={parentId} index={index} depth={depth} />
+          <LayerNode id={id} parentId={parentId} index={index} depth={depth} />
+        </Fragment>
+      ))}
+      <LayerDropZone parentId={parentId} index={ids.length} depth={depth} />
+    </>
+  )
+}
+
+function LayerNode({
+  id,
+  parentId,
+  index,
+  depth = 0,
+}: {
+  id: string
+  parentId: string | null
+  index: number
+  depth?: number
+}) {
   const node = useEditorStore((state) => state.nodes[id])
-  const selectedId = useEditorStore((state) => state.selectedId)
+  const selectedIds = useEditorStore((state) => state.selectedIds)
   const selectNode = useEditorStore((state) => state.selectNode)
   const renameNode = useEditorStore((state) => state.renameNode)
   const toggleNodeVisibility = useEditorStore((state) => state.toggleNodeVisibility)
@@ -180,6 +236,12 @@ function LayerNode({ id, depth = 0 }: { id: string; depth?: number }) {
   const projectComponents = useEditorStore((state) => state.projectComponents)
   const [editing, setEditing] = useState(false)
   const [draftName, setDraftName] = useState('')
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `layer-${id}`,
+    data: { source: 'canvas', nodeId: id, parentId, index },
+    disabled: !!node?.locked || editing,
+  })
 
   if (!node) return null
 
@@ -193,6 +255,7 @@ function LayerNode({ id, depth = 0 }: { id: string; depth?: number }) {
     node.type.charAt(0).toUpperCase() + node.type.slice(1)
   )
   const label = node.name || fallbackLabel
+  const selected = selectedIds.includes(id)
 
   const startRename = () => {
     setDraftName(label)
@@ -207,10 +270,28 @@ function LayerNode({ id, depth = 0 }: { id: string; depth?: number }) {
   return (
     <>
       <div
-        className={`layer-entry ${selectedId === id ? 'active' : ''} ${node.visible === false ? 'is-hidden' : ''} ${node.locked ? 'is-locked' : ''}`}
-        style={{ paddingLeft: 6 + depth * 14 }}
+        ref={setNodeRef}
+        className={`layer-entry ${selected ? 'active' : ''} ${node.visible === false ? 'is-hidden' : ''} ${node.locked ? 'is-locked' : ''} ${isDragging ? 'dragging' : ''}`}
+        style={{
+          paddingLeft: 6 + depth * 14,
+          ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}),
+        }}
       >
-        <button className="layer-row" onClick={() => selectNode(id)} onDoubleClick={startRename}>
+        <button
+          className="layer-drag-handle"
+          title="Drag to reorder"
+          aria-label={`Reorder ${label}`}
+          {...listeners}
+          {...attributes}
+        >
+          ⋮⋮
+        </button>
+
+        <button
+          className="layer-row"
+          onClick={(event) => selectNode(id, event.shiftKey)}
+          onDoubleClick={startRename}
+        >
           <span className="layer-dot" />
           {editing ? (
             <input
@@ -251,9 +332,9 @@ function LayerNode({ id, depth = 0 }: { id: string; depth?: number }) {
         </div>
       </div>
 
-      {node.children.map((childId) => (
-        <LayerNode key={childId} id={childId} depth={depth + 1} />
-      ))}
+      {node.children.length > 0 && (
+        <LayerChildren ids={node.children} parentId={id} depth={depth + 1} />
+      )}
     </>
   )
 }
@@ -338,7 +419,11 @@ export function Sidebar() {
             <small>{Object.keys(nodes).length} nodes</small>
           </div>
           <div className="layers-list">
-            {rootIds.length ? rootIds.map((id) => <LayerNode key={id} id={id} />) : <p className="empty-small">No layers yet.</p>}
+            {rootIds.length ? (
+              <LayerChildren ids={rootIds} parentId={null} depth={0} />
+            ) : (
+              <p className="empty-small">No layers yet.</p>
+            )}
           </div>
         </section>
       ) : (
