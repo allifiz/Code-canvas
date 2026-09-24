@@ -1,9 +1,11 @@
-import { useRef, type ChangeEvent } from 'react'
+import { useRef, type ChangeEvent, type ReactNode } from 'react'
 import type {
   CanvasDocument,
   CanvasNode,
   CodeCanvasProject,
   ComponentPropValue,
+  NodeType,
+  PresetType,
   ProjectComponentDefinition,
   Viewport,
 } from '../types'
@@ -40,7 +42,7 @@ const isCanvasNode = (value: unknown): value is CanvasNode => {
 
   return (
     typeof node.id === 'string' &&
-    ['container', 'text', 'button', 'input', 'image', 'component'].includes(node.type ?? '') &&
+    ['container', 'text', 'button', 'input', 'textarea', 'link', 'divider', 'image', 'component'].includes(node.type ?? '') &&
     !!node.props &&
     typeof node.props === 'object' &&
     Array.isArray(node.children) &&
@@ -91,7 +93,6 @@ const isCodeCanvasProject = (value: unknown): value is CodeCanvasProject => {
   if (!project.projectComponents.every(isProjectComponent)) return false
 
   const componentIds = new Set(project.projectComponents.map((component) => component.id))
-
   return Object.values(project.document.nodes).every(
     (node) =>
       node.type !== 'component' ||
@@ -99,9 +100,65 @@ const isCodeCanvasProject = (value: unknown): value is CodeCanvasProject => {
   )
 }
 
+function Menu({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <details className="app-menu">
+      <summary>{label}</summary>
+      <div className="app-menu-popover">{children}</div>
+    </details>
+  )
+}
+
+function MenuItem({
+  children,
+  shortcut,
+  disabled,
+  onClick,
+}: {
+  children: ReactNode
+  shortcut?: string
+  disabled?: boolean
+  onClick?: () => void
+}) {
+  return (
+    <button className="app-menu-item" disabled={disabled} onClick={onClick}>
+      <span>{children}</span>
+      {shortcut && <kbd>{shortcut}</kbd>}
+    </button>
+  )
+}
+
+const builtIns: Array<{ type: Exclude<NodeType, 'component'>; label: string }> = [
+  { type: 'container', label: 'Frame' },
+  { type: 'text', label: 'Text' },
+  { type: 'button', label: 'Button' },
+  { type: 'input', label: 'Input' },
+  { type: 'textarea', label: 'Textarea' },
+  { type: 'link', label: 'Link' },
+  { type: 'divider', label: 'Divider' },
+  { type: 'image', label: 'Image' },
+]
+
+const presets: Array<{ preset: PresetType; label: string }> = [
+  { preset: 'navbar', label: 'Navbar' },
+  { preset: 'hero', label: 'Hero section' },
+  { preset: 'card', label: 'Card' },
+  { preset: 'login-form', label: 'Login form' },
+]
+
 export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
   const viewport = useEditorStore((state) => state.viewport)
   const setViewport = useEditorStore((state) => state.setViewport)
+  const zoom = useEditorStore((state) => state.zoom)
+  const setZoom = useEditorStore((state) => state.setZoom)
+  const showGrid = useEditorStore((state) => state.showGrid)
+  const toggleGrid = useEditorStore((state) => state.toggleGrid)
   const loadDemo = useEditorStore((state) => state.loadDemo)
   const loadDocument = useEditorStore((state) => state.loadDocument)
   const loadProject = useEditorStore((state) => state.loadProject)
@@ -112,10 +169,29 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
   const canRedo = useEditorStore((state) => state.future.length > 0)
   const nodes = useEditorStore((state) => state.nodes)
   const rootIds = useEditorStore((state) => state.rootIds)
+  const selectedId = useEditorStore((state) => state.selectedId)
   const projectComponents = useEditorStore((state) => state.projectComponents)
+  const addNode = useEditorStore((state) => state.addNode)
+  const addPreset = useEditorStore((state) => state.addPreset)
+  const duplicateNode = useEditorStore((state) => state.duplicateNode)
+  const deleteNode = useEditorStore((state) => state.deleteNode)
+  const copyStyle = useEditorStore((state) => state.copyStyle)
+  const pasteStyle = useEditorStore((state) => state.pasteStyle)
+  const copiedStyle = useEditorStore((state) => state.copiedStyle)
   const importInputRef = useRef<HTMLInputElement>(null)
 
-  const presets: Array<{ value: Viewport; label: string }> = [
+  const selected = selectedId ? nodes[selectedId] : undefined
+  const selectedProjectComponent =
+    selected?.type === 'component'
+      ? projectComponents.find((item) => item.id === selected.props.componentId)
+      : undefined
+
+  const insertionParent =
+    selected?.type === 'container' || selectedProjectComponent?.acceptsChildren
+      ? selectedId
+      : null
+
+  const viewportPresets: Array<{ value: Viewport; label: string }> = [
     { value: 'desktop', label: 'Desktop' },
     { value: 'tablet', label: 'Tablet' },
     { value: 'mobile', label: 'Mobile' },
@@ -173,14 +249,65 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
 
   return (
     <header className="topbar">
-      <div className="brand">
-        <span className="brand-mark">C</span>
-        <span>CodeCanvas</span>
-        <small>v0.2</small>
+      <div className="topbar-left">
+        <div className="brand">
+          <span className="brand-mark">C</span>
+          <span>CodeCanvas</span>
+          <small>v0.3</small>
+        </div>
+
+        <nav className="app-menu-bar">
+          <Menu label="File">
+            <MenuItem onClick={() => importInputRef.current?.click()}>Import project…</MenuItem>
+            <MenuItem onClick={exportDocument}>Export project JSON</MenuItem>
+            <div className="app-menu-separator" />
+            <MenuItem onClick={loadDemo}>Load demo</MenuItem>
+            <MenuItem onClick={clearCanvas}>New blank canvas</MenuItem>
+            <div className="app-menu-separator" />
+            <MenuItem onClick={onOpenCode}>View generated code</MenuItem>
+          </Menu>
+
+          <Menu label="Edit">
+            <MenuItem disabled={!canUndo} shortcut="⌘Z" onClick={undo}>Undo</MenuItem>
+            <MenuItem disabled={!canRedo} shortcut="⇧⌘Z" onClick={redo}>Redo</MenuItem>
+            <div className="app-menu-separator" />
+            <MenuItem disabled={!selectedId} shortcut="⌘D" onClick={() => selectedId && duplicateNode(selectedId)}>Duplicate</MenuItem>
+            <MenuItem disabled={!selectedId} shortcut="⌥⌘C" onClick={() => selectedId && copyStyle(selectedId)}>Copy style</MenuItem>
+            <MenuItem disabled={!selectedId || !copiedStyle} shortcut="⌥⌘V" onClick={() => selectedId && pasteStyle(selectedId)}>Paste style</MenuItem>
+            <div className="app-menu-separator" />
+            <MenuItem disabled={!selectedId} shortcut="⌫" onClick={() => selectedId && deleteNode(selectedId)}>Delete</MenuItem>
+          </Menu>
+
+          <Menu label="Insert">
+            <div className="app-menu-label">Basic</div>
+            {builtIns.map((item) => (
+              <MenuItem key={item.type} onClick={() => addNode(item.type, insertionParent)}>
+                {item.label}
+              </MenuItem>
+            ))}
+            <div className="app-menu-separator" />
+            <div className="app-menu-label">Blocks</div>
+            {presets.map((item) => (
+              <MenuItem key={item.preset} onClick={() => addPreset(item.preset, insertionParent)}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </Menu>
+
+          <Menu label="View">
+            <MenuItem onClick={toggleGrid}>{showGrid ? 'Hide layout grid' : 'Show layout grid'}</MenuItem>
+            <div className="app-menu-separator" />
+            {[0.5, 0.75, 1, 1.25, 1.5].map((value) => (
+              <MenuItem key={value} onClick={() => setZoom(value)}>
+                Zoom {Math.round(value * 100)}%
+              </MenuItem>
+            ))}
+          </Menu>
+        </nav>
       </div>
 
       <div className="viewport-switcher" aria-label="Canvas viewport">
-        {presets.map((preset) => (
+        {viewportPresets.map((preset) => (
           <button
             key={preset.value}
             className={viewport === preset.value ? 'active' : ''}
@@ -192,12 +319,13 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
       </div>
 
       <div className="topbar-actions">
-        <button className="ghost-button" onClick={undo} disabled={!canUndo} title="Undo (Ctrl/Cmd+Z)">↶</button>
-        <button className="ghost-button" onClick={redo} disabled={!canRedo} title="Redo (Ctrl/Cmd+Shift+Z)">↷</button>
-        <button className="ghost-button" onClick={() => importInputRef.current?.click()} title="Import CodeCanvas JSON">Import</button>
-        <button className="ghost-button" onClick={exportDocument} title="Export CodeCanvas JSON">Export</button>
-        <button className="ghost-button" onClick={loadDemo}>Demo</button>
-        <button className="ghost-button" onClick={clearCanvas}>Clear</button>
+        <div className="zoom-control">
+          <button onClick={() => setZoom(zoom - 0.1)} title="Zoom out">−</button>
+          <span>{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom(zoom + 0.1)} title="Zoom in">+</button>
+        </div>
+        <button className="ghost-button icon-action" onClick={undo} disabled={!canUndo} title="Undo">↶</button>
+        <button className="ghost-button icon-action" onClick={redo} disabled={!canRedo} title="Redo">↷</button>
         <button className="primary-button" onClick={onOpenCode}>&lt;/&gt; Code</button>
         <input
           ref={importInputRef}
