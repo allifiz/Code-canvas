@@ -229,6 +229,7 @@ function ProjectComponentContent({
 function CanvasItem({ id }: { id: string }) {
   const node = useEditorStore((state) => state.nodes[id])
   const selectedId = useEditorStore((state) => state.selectedId)
+  const selectedIds = useEditorStore((state) => state.selectedIds)
   const selectNode = useEditorStore((state) => state.selectNode)
   const updateNode = useEditorStore((state) => state.updateNode)
   const zoom = useEditorStore((state) => state.zoom)
@@ -253,7 +254,7 @@ function CanvasItem({ id }: { id: string }) {
   const handleClick = (event: MouseEvent) => {
     event.stopPropagation()
     if (node.locked) return
-    selectNode(id)
+    selectNode(id, event.shiftKey)
   }
 
   const handleDoubleClick = (event: MouseEvent) => {
@@ -320,6 +321,12 @@ function CanvasItem({ id }: { id: string }) {
   const visualHeight = previewSize?.height ?? node.props.height
   const intrinsicWidth = node.type === 'text' || node.type === 'button' || node.type === 'link'
 
+  const persistentX = node.props.translateX ?? 0
+  const persistentY = node.props.translateY ?? 0
+  const dragTransform = transform
+    ? ` translate3d(${transform.x}px, ${transform.y}px, 0)`
+    : ''
+
   const transformStyle: CSSProperties = {
     width: visualWidth === 'auto' || (!visualWidth && intrinsicWidth) ? 'fit-content' : visualWidth,
     height: visualHeight === 'auto' ? undefined : visualHeight,
@@ -328,7 +335,7 @@ function CanvasItem({ id }: { id: string }) {
     marginRight: node.props.marginRight,
     marginBottom: node.props.marginBottom,
     marginLeft: node.props.marginLeft,
-    ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}),
+    transform: `translate(${persistentX}px, ${persistentY}px)${dragTransform}`,
   }
 
   const content = (() => {
@@ -411,7 +418,8 @@ function CanvasItem({ id }: { id: string }) {
         ? 'Frame'
         : node.type
 
-  const isSelected = selectedId === id
+  const isSelected = selectedIds.includes(id)
+  const isPrimarySelection = selectedId === id
 
   return (
     <div
@@ -426,7 +434,7 @@ function CanvasItem({ id }: { id: string }) {
       <span className="node-tag">{componentLabel}</span>
       {content}
 
-      {isSelected && !isDragging && !node.locked && !editingText && (
+      {isPrimarySelection && selectedIds.length === 1 && !isDragging && !node.locked && !editingText && (
         <>
           <button
             className="resize-handle resize-east"
@@ -455,6 +463,63 @@ export function Canvas() {
   const zoom = useEditorStore((state) => state.zoom)
   const showGrid = useEditorStore((state) => state.showGrid)
   const selectNode = useEditorStore((state) => state.selectNode)
+  const [spaceDown, setSpaceDown] = useState(false)
+  const [panning, setPanning] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const keyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const editing =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable
+
+      if (event.code === 'Space' && !editing) {
+        event.preventDefault()
+        setSpaceDown(true)
+      }
+    }
+
+    const keyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        setSpaceDown(false)
+        setPanning(false)
+      }
+    }
+
+    window.addEventListener('keydown', keyDown)
+    window.addEventListener('keyup', keyUp)
+    return () => {
+      window.removeEventListener('keydown', keyDown)
+      window.removeEventListener('keyup', keyUp)
+    }
+  }, [])
+
+  const startPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!spaceDown || event.button !== 0 || !scrollRef.current) return
+
+    event.preventDefault()
+    const scroller = scrollRef.current
+    const startX = event.clientX
+    const startY = event.clientY
+    const startLeft = scroller.scrollLeft
+    const startTop = scroller.scrollTop
+    setPanning(true)
+
+    const move = (pointerEvent: PointerEvent) => {
+      scroller.scrollLeft = startLeft - (pointerEvent.clientX - startX)
+      scroller.scrollTop = startTop - (pointerEvent.clientY - startY)
+    }
+
+    const end = () => {
+      window.removeEventListener('pointermove', move)
+      setPanning(false)
+    }
+
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end, { once: true })
+  }
 
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas-root',
@@ -462,13 +527,16 @@ export function Canvas() {
   })
 
   return (
-    <main className={`workspace ${showGrid ? '' : 'grid-hidden'}`} onClick={() => selectNode(null)}>
+    <main
+      className={`workspace ${showGrid ? '' : 'grid-hidden'} ${spaceDown ? 'pan-ready' : ''} ${panning ? 'panning' : ''}`}
+      onClick={() => selectNode(null)}
+    >
       <div className="viewport-label">
         <span>{viewport}</span>
         <code>{viewportWidths[viewport]} px · {Math.round(zoom * 100)}%</code>
       </div>
 
-      <div className="canvas-scroll">
+      <div ref={scrollRef} className="canvas-scroll" onPointerDown={startPan}>
         <div className="canvas-zoom-stage" style={{ width: viewportWidths[viewport], transform: `scale(${zoom})` }}>
           <div
             ref={setNodeRef}
