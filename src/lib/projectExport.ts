@@ -242,27 +242,25 @@ export function downloadStandaloneProject(
     2,
   )
 
-  const readme = `# CodeCanvas Export
-
-This project was generated from CodeCanvas.
-
-## Run
-
-```bash
-npm install
-npm run dev
-```
-
-## Build
-
-```bash
-npm run build
-```
-
-The generated interface lives in `src/GeneratedPage.tsx`.
-
-The original CodeCanvas schema is included as `codecanvas.project.json` so the project can be reopened in CodeCanvas later.
-`
+  const readme = [
+    '# CodeCanvas Export',
+    '',
+    'This project was generated from CodeCanvas.',
+    '',
+    '## Run',
+    '',
+    '    npm install',
+    '    npm run dev',
+    '',
+    '## Build',
+    '',
+    '    npm run build',
+    '',
+    'The generated interface lives in src/GeneratedPage.tsx.',
+    '',
+    'The original CodeCanvas schema is included as codecanvas.project.json so the project can be reopened in CodeCanvas later.',
+    '',
+  ].join('\\n')
 
   const zip = createZip({
     'README.md': readme,
