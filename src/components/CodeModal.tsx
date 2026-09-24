@@ -1,12 +1,19 @@
 import { useMemo, useState } from 'react'
-import { generateReactCode } from '../lib/generator'
+import { generateHtmlCode, generateReactCode } from '../lib/generator'
 import { useEditorStore } from '../store'
+
+type CodeFormat = 'react' | 'html'
 
 export function CodeModal({ onClose }: { onClose: () => void }) {
   const nodes = useEditorStore((state) => state.nodes)
   const rootIds = useEditorStore((state) => state.rootIds)
+  const [format, setFormat] = useState<CodeFormat>('react')
   const [copied, setCopied] = useState(false)
-  const code = useMemo(() => generateReactCode(nodes, rootIds), [nodes, rootIds])
+
+  const code = useMemo(
+    () => format === 'react' ? generateReactCode(nodes, rootIds) : generateHtmlCode(nodes, rootIds),
+    [format, nodes, rootIds],
+  )
 
   const copy = async () => {
     await navigator.clipboard.writeText(code)
@@ -19,7 +26,7 @@ export function CodeModal({ onClose }: { onClose: () => void }) {
     const href = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = href
-    anchor.download = 'GeneratedPage.tsx'
+    anchor.download = format === 'react' ? 'GeneratedPage.tsx' : 'index.html'
     anchor.click()
     URL.revokeObjectURL(href)
   }
@@ -29,16 +36,27 @@ export function CodeModal({ onClose }: { onClose: () => void }) {
       <section className="code-modal" onMouseDown={(event) => event.stopPropagation()}>
         <header>
           <div>
-            <small>React + Tailwind</small>
+            <small>{format === 'react' ? 'React + Tailwind' : 'HTML + CSS'}</small>
             <h2>Generated code</h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close">×</button>
+
+          <div className="code-header-actions">
+            <div className="code-format-switcher" aria-label="Code export format">
+              <button className={format === 'react' ? 'active' : ''} onClick={() => setFormat('react')}>React</button>
+              <button className={format === 'html' ? 'active' : ''} onClick={() => setFormat('html')}>HTML</button>
+            </div>
+            <button className="icon-button" onClick={onClose} aria-label="Close">×</button>
+          </div>
         </header>
+
         <pre><code>{code}</code></pre>
+
         <footer>
           <span>Generated from the current CodeCanvas schema.</span>
           <div>
-            <button className="ghost-button" onClick={download}>Download .tsx</button>
+            <button className="ghost-button" onClick={download}>
+              Download {format === 'react' ? '.tsx' : '.html'}
+            </button>
             <button className="primary-button" onClick={copy}>{copied ? 'Copied!' : 'Copy code'}</button>
           </div>
         </footer>
