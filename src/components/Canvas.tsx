@@ -37,14 +37,26 @@ function nodeStyle(node: CanvasNode): CSSProperties {
   return base
 }
 
-function InsertZone({ parentId, index }: { parentId: string | null; index: number }) {
+function InsertZone({
+  parentId,
+  index,
+  direction = 'column',
+}: {
+  parentId: string | null
+  index: number
+  direction?: 'row' | 'column'
+}) {
   const { setNodeRef, isOver } = useDroppable({
     id: `insert-${parentId ?? 'root'}-${index}`,
     data: { parentId, index, kind: 'insert' },
   })
 
   return (
-    <div ref={setNodeRef} className={`insert-zone ${isOver ? 'active' : ''}`}>
+    <div
+      ref={setNodeRef}
+      className={`insert-zone ${direction} ${isOver ? 'active' : ''}`}
+      aria-hidden="true"
+    >
       <span />
     </div>
   )
@@ -62,11 +74,11 @@ function ContainerContent({ node }: { node: CanvasNode }) {
         <>
           {node.children.map((childId, index) => (
             <Fragment key={childId}>
-              <InsertZone parentId={node.id} index={index} />
+              <InsertZone parentId={node.id} index={index} direction={node.props.direction ?? 'column'} />
               <CanvasItem id={childId} />
             </Fragment>
           ))}
-          <InsertZone parentId={node.id} index={node.children.length} />
+          <InsertZone parentId={node.id} index={node.children.length} direction={node.props.direction ?? 'column'} />
         </>
       ) : (
         <div className="container-placeholder">Drop components here</div>
