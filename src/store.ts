@@ -126,13 +126,14 @@ interface EditorState extends CanvasDocument {
   viewport: Viewport
   past: DocumentSnapshot[]
   future: DocumentSnapshot[]
-  addNode: (type: NodeType, parentId: string | null) => string
-  moveNode: (nodeId: string, parentId: string | null) => void
+  addNode: (type: NodeType, parentId: string | null, index?: number) => string
+  moveNode: (nodeId: string, parentId: string | null, index?: number) => void
   updateNode: (nodeId: string, props: Partial<NodeProps>) => void
   deleteNode: (nodeId: string) => void
   selectNode: (nodeId: string | null) => void
   setViewport: (viewport: Viewport) => void
   loadDemo: () => void
+  loadDocument: (document: CanvasDocument) => void
   clearCanvas: () => void
   undo: () => void
   redo: () => void
@@ -158,6 +159,13 @@ const pushHistory = (state: EditorState) => ({
   future: [],
 })
 
+const insertAt = (ids: string[], id: string, index?: number) => {
+  const next = [...ids]
+  const safeIndex = index === undefined ? next.length : Math.max(0, Math.min(index, next.length))
+  next.splice(safeIndex, 0, id)
+  return next
+}
+
 const demo = createDemoDocument()
 
 export const useEditorStore = create<EditorState>()(
@@ -169,8 +177,9 @@ export const useEditorStore = create<EditorState>()(
       past: [],
       future: [],
 
-      addNode: (type, parentId) => {
+      addNode: (type, parentId, index) => {
         const node = makeNode(type)
+
         set((state) => {
           const nodes = { ...state.nodes, [node.id]: node }
           const history = pushHistory(state)
@@ -178,22 +187,24 @@ export const useEditorStore = create<EditorState>()(
           if (parentId && nodes[parentId]?.type === 'container') {
             nodes[parentId] = {
               ...nodes[parentId],
-              children: [...nodes[parentId].children, node.id],
+              children: insertAt(nodes[parentId].children, node.id, index),
             }
+
             return { nodes, selectedId: node.id, ...history }
           }
 
           return {
             nodes,
-            rootIds: [...state.rootIds, node.id],
+            rootIds: insertAt(state.rootIds, node.id, index),
             selectedId: node.id,
             ...history,
           }
         })
+
         return node.id
       },
 
-      moveNode: (nodeId, parentId) => {
+      moveNode: (nodeId, parentId, index) => {
         const state = get()
         if (!state.nodes[nodeId] || nodeId === parentId) return
         if (parentId && state.nodes[parentId]?.type !== 'container') return
@@ -214,9 +225,12 @@ export const useEditorStore = create<EditorState>()(
 
           if (parentId) {
             const parent = nodes[parentId]
-            nodes[parentId] = { ...parent, children: [...parent.children, nodeId] }
+            nodes[parentId] = {
+              ...parent,
+              children: insertAt(parent.children, nodeId, index),
+            }
           } else {
-            rootIds = [...rootIds, nodeId]
+            rootIds = insertAt(rootIds, nodeId, index)
           }
 
           return {
@@ -278,6 +292,14 @@ export const useEditorStore = create<EditorState>()(
             ...pushHistory(state),
           }
         }),
+
+      loadDocument: (document) =>
+        set((state) => ({
+          nodes: structuredClone(document.nodes),
+          rootIds: [...document.rootIds],
+          selectedId: null,
+          ...pushHistory(state),
+        })),
 
       clearCanvas: () =>
         set((state) => ({
