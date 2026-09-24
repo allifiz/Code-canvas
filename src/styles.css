@@ -377,3 +377,47 @@ button { color: inherit; }
   .brand > span:not(.brand-mark), .brand small { display: none; }
   .topbar { grid-template-columns: minmax(310px, 1fr) auto minmax(230px, 1fr); }
 }
+
+
+/* direct resize handles */
+.canvas-node { position: relative; }
+.resize-handle {
+  position: absolute;
+  z-index: 20;
+  display: block;
+  padding: 0;
+  border: 1px solid #ffffff;
+  background: #6d5dfc;
+  box-shadow: 0 0 0 1px #6d5dfc;
+  pointer-events: auto;
+}
+.resize-east {
+  top: 50%;
+  right: -4px;
+  width: 7px;
+  height: 16px;
+  border-radius: 4px;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+.resize-south {
+  bottom: -4px;
+  left: 50%;
+  width: 16px;
+  height: 7px;
+  border-radius: 4px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+.resize-southeast {
+  right: -5px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  cursor: nwse-resize;
+}
+body.is-resizing,
+body.is-resizing * {
+  user-select: none !important;
+}
