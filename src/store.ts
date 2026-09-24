@@ -519,6 +519,7 @@ interface EditorState extends CanvasDocument {
   moveNode: (nodeId: string, parentId: string | null, index?: number) => void
   updateNode: (nodeId: string, props: Partial<NodeProps>) => void
   deleteNode: (nodeId: string) => void
+  deleteSelected: () => void
   duplicateNode: (nodeId: string) => void
   copyStyle: (nodeId: string) => void
   pasteStyle: (nodeId: string) => void
@@ -785,6 +786,43 @@ export const useEditorStore = create<EditorState>()(
             rootIds: state.rootIds.filter((id) => !toDelete.has(id)),
             selectedId: toDelete.has(state.selectedId ?? '') ? null : state.selectedId,
             selectedIds: state.selectedIds.filter((id) => !toDelete.has(id)),
+            ...pushHistory(state),
+          }
+        }),
+
+      deleteSelected: () =>
+        set((state) => {
+          const selectedSet = new Set(state.selectedIds.filter((id) => state.nodes[id] && !state.nodes[id].locked))
+          if (!selectedSet.size) return state
+
+          const topLevelSelected = [...selectedSet].filter((id) => {
+            return ![...selectedSet].some((candidate) => {
+              if (candidate === id) return false
+              return collectDescendants(state.nodes, candidate).has(id)
+            })
+          })
+
+          const toDelete = new Set<string>()
+          for (const id of topLevelSelected) {
+            toDelete.add(id)
+            collectDescendants(state.nodes, id, toDelete)
+          }
+
+          const nodes = { ...state.nodes }
+          toDelete.forEach((id) => delete nodes[id])
+
+          for (const node of Object.values(nodes)) {
+            const children = node.children.filter((id) => !toDelete.has(id))
+            if (children.length !== node.children.length) {
+              nodes[node.id] = { ...node, children }
+            }
+          }
+
+          return {
+            nodes,
+            rootIds: state.rootIds.filter((id) => !toDelete.has(id)),
+            selectedId: null,
+            selectedIds: [],
             ...pushHistory(state),
           }
         }),
