@@ -15,7 +15,7 @@ CodeCanvas is a source-code-first visual UI builder. Instead of treating the can
 - Edit layout and visual properties
 - Switch desktop, tablet, and mobile canvas widths
 - Persist the current document locally
-- Export readable React + Tailwind code
+- Export readable React + Tailwind or standalone HTML + CSS
 - Copy generated code directly from the editor
 - Start from a built-in demo or a blank canvas
 
@@ -89,7 +89,7 @@ Use **Export** to save the current canvas as a versioned CodeCanvas JSON file, t
 - [ ] Parse existing JSX into the CodeCanvas schema
 - [ ] Two-way visual/code editing
 - [ ] Vue generator
-- [ ] HTML/CSS generator
+- [x] HTML/CSS generator
 - [ ] Design tokens
 - [ ] Component variants
 - [ ] Export a full project
