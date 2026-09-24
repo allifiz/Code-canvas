@@ -1,7 +1,7 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { Fragment, type CSSProperties, type MouseEvent } from 'react'
 import { useEditorStore } from '../store'
-import type { CanvasNode } from '../types'
+import type { CanvasNode, ProjectComponentDefinition } from '../types'
 
 const viewportWidths = {
   desktop: 1200,
@@ -62,6 +62,26 @@ function InsertZone({
   )
 }
 
+function ChildrenList({
+  node,
+  direction = 'column',
+}: {
+  node: CanvasNode
+  direction?: 'row' | 'column'
+}) {
+  return (
+    <>
+      {node.children.map((childId, index) => (
+        <Fragment key={childId}>
+          <InsertZone parentId={node.id} index={index} direction={direction} />
+          <CanvasItem id={childId} />
+        </Fragment>
+      ))}
+      <InsertZone parentId={node.id} index={node.children.length} direction={direction} />
+    </>
+  )
+}
+
 function ContainerContent({ node }: { node: CanvasNode }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `drop-${node.id}`,
@@ -71,17 +91,68 @@ function ContainerContent({ node }: { node: CanvasNode }) {
   return (
     <div ref={setNodeRef} className={`container-content ${isOver ? 'drop-active' : ''}`} style={nodeStyle(node)}>
       {node.children.length ? (
-        <>
-          {node.children.map((childId, index) => (
-            <Fragment key={childId}>
-              <InsertZone parentId={node.id} index={index} direction={node.props.direction ?? 'column'} />
-              <CanvasItem id={childId} />
-            </Fragment>
-          ))}
-          <InsertZone parentId={node.id} index={node.children.length} direction={node.props.direction ?? 'column'} />
-        </>
+        <ChildrenList node={node} direction={node.props.direction ?? 'column'} />
       ) : (
         <div className="container-placeholder">Drop components here</div>
+      )}
+    </div>
+  )
+}
+
+function ProjectComponentContent({
+  node,
+  component,
+}: {
+  node: CanvasNode
+  component?: ProjectComponentDefinition
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `drop-${node.id}`,
+    data: { parentId: node.id },
+    disabled: !component?.acceptsChildren,
+  })
+
+  if (!component) {
+    return (
+      <div className="project-node missing" style={nodeStyle(node)}>
+        <strong>Missing project component</strong>
+        <small>Re-register the component used by this node.</small>
+      </div>
+    )
+  }
+
+  const entries = Object.entries(node.props.componentProps ?? {})
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`project-node ${component.acceptsChildren ? 'accepts-children' : ''} ${isOver ? 'drop-active' : ''}`}
+      style={nodeStyle(node)}
+    >
+      <div className="project-node-header">
+        <span className="project-node-icon">◆</span>
+        <div>
+          <strong>{component.name}</strong>
+          <small>{component.importPath}</small>
+        </div>
+      </div>
+
+      {entries.length > 0 && (
+        <div className="project-node-props">
+          {entries.map(([key, value]) => (
+            <code key={key}>{key}={JSON.stringify(value)}</code>
+          ))}
+        </div>
+      )}
+
+      {component.acceptsChildren && (
+        <div className="project-node-children">
+          {node.children.length ? (
+            <ChildrenList node={node} />
+          ) : (
+            <div className="container-placeholder">Drop children into {component.name}</div>
+          )}
+        </div>
       )}
     </div>
   )
@@ -91,6 +162,7 @@ function CanvasItem({ id }: { id: string }) {
   const node = useEditorStore((state) => state.nodes[id])
   const selectedId = useEditorStore((state) => state.selectedId)
   const selectNode = useEditorStore((state) => state.selectNode)
+  const projectComponents = useEditorStore((state) => state.projectComponents)
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `node-${id}`,
     data: { source: 'canvas', nodeId: id },
@@ -123,8 +195,17 @@ function CanvasItem({ id }: { id: string }) {
         return <input className="canvas-input" style={nodeStyle(node)} placeholder={node.props.placeholder} readOnly />
       case 'image':
         return <img className="canvas-image" style={nodeStyle(node)} src={node.props.src} alt={node.props.alt ?? ''} />
+      case 'component': {
+        const component = projectComponents.find((item) => item.id === node.props.componentId)
+        return <ProjectComponentContent node={node} component={component} />
+      }
     }
   })()
+
+  const componentLabel =
+    node.type === 'component'
+      ? projectComponents.find((item) => item.id === node.props.componentId)?.name ?? 'component'
+      : node.type
 
   return (
     <div
@@ -135,7 +216,7 @@ function CanvasItem({ id }: { id: string }) {
       {...listeners}
       {...attributes}
     >
-      <span className="node-tag">{node.type}</span>
+      <span className="node-tag">{componentLabel}</span>
       {content}
     </div>
   )
@@ -176,7 +257,7 @@ export function Canvas() {
             <div className="empty-canvas">
               <div className="empty-mark">+</div>
               <h2>Start with a component</h2>
-              <p>Drag a container, text, button, input, or image from the left panel.</p>
+              <p>Drag a built-in or project component from the left panel.</p>
             </div>
           )}
         </div>
