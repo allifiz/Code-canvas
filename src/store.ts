@@ -155,6 +155,7 @@ interface EditorState extends CanvasDocument {
   moveNode: (nodeId: string, parentId: string | null, index?: number) => void
   updateNode: (nodeId: string, props: Partial<NodeProps>) => void
   deleteNode: (nodeId: string) => void
+  duplicateNode: (nodeId: string) => void
   selectNode: (nodeId: string | null) => void
   setViewport: (viewport: Viewport) => void
   loadDemo: () => void
@@ -163,6 +164,28 @@ interface EditorState extends CanvasDocument {
   clearCanvas: () => void
   undo: () => void
   redo: () => void
+}
+
+function cloneBranch(nodes: Record<string, CanvasNode>, nodeId: string) {
+  const clonedNodes: Record<string, CanvasNode> = {}
+
+  const clone = (sourceId: string): string => {
+    const source = nodes[sourceId]
+    const clonedId = uid()
+    const childIds = source.children.map(clone)
+
+    clonedNodes[clonedId] = {
+      ...source,
+      id: clonedId,
+      props: structuredClone(source.props),
+      children: childIds,
+    }
+
+    return clonedId
+  }
+
+  const rootId = clone(nodeId)
+  return { rootId, nodes: clonedNodes }
 }
 
 function collectDescendants(nodes: Record<string, CanvasNode>, nodeId: string, bag = new Set<string>()) {
@@ -381,6 +404,37 @@ export const useEditorStore = create<EditorState>()(
             nodes,
             rootIds: state.rootIds.filter((id) => !toDelete.has(id)),
             selectedId: toDelete.has(state.selectedId ?? '') ? null : state.selectedId,
+            ...pushHistory(state),
+          }
+        }),
+
+      duplicateNode: (nodeId) =>
+        set((state) => {
+          if (!state.nodes[nodeId]) return state
+
+          const cloned = cloneBranch(state.nodes, nodeId)
+          const nodes = { ...state.nodes, ...cloned.nodes }
+          const parent = Object.values(state.nodes).find((node) => node.children.includes(nodeId))
+
+          if (parent) {
+            const sourceIndex = parent.children.indexOf(nodeId)
+            nodes[parent.id] = {
+              ...nodes[parent.id],
+              children: insertAt(parent.children, cloned.rootId, sourceIndex + 1),
+            }
+
+            return {
+              nodes,
+              selectedId: cloned.rootId,
+              ...pushHistory(state),
+            }
+          }
+
+          const sourceIndex = state.rootIds.indexOf(nodeId)
+          return {
+            nodes,
+            rootIds: insertAt(state.rootIds, cloned.rootId, sourceIndex + 1),
+            selectedId: cloned.rootId,
             ...pushHistory(state),
           }
         }),
