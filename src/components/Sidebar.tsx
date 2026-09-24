@@ -1,8 +1,11 @@
 import { useDraggable } from '@dnd-kit/core'
-import type { NodeType } from '../types'
+import { useState } from 'react'
+import type { ComponentPropValue, NodeType, ProjectComponentDefinition } from '../types'
 import { useEditorStore } from '../store'
 
-const palette: Array<{ type: NodeType; label: string; icon: string; description: string }> = [
+type BuiltInNodeType = Exclude<NodeType, 'component'>
+
+const palette: Array<{ type: BuiltInNodeType; label: string; icon: string; description: string }> = [
   { type: 'container', label: 'Container', icon: '□', description: 'Flex layout wrapper' },
   { type: 'text', label: 'Text', icon: 'T', description: 'Heading or paragraph' },
   { type: 'button', label: 'Button', icon: '↗', description: 'Interactive action' },
@@ -33,11 +36,129 @@ function PaletteItem({ item }: { item: (typeof palette)[number] }) {
   )
 }
 
+function ProjectComponentItem({
+  component,
+  onRemove,
+}: {
+  component: ProjectComponentDefinition
+  onRemove: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `project-component-${component.id}`,
+    data: { source: 'project-component', componentId: component.id },
+  })
+
+  return (
+    <div className="project-component-row">
+      <button
+        ref={setNodeRef}
+        className={`project-component-item ${isDragging ? 'dragging' : ''}`}
+        style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
+        {...listeners}
+        {...attributes}
+      >
+        <span className="palette-icon">◆</span>
+        <span>
+          <strong>{component.name}</strong>
+          <small>{component.importPath}</small>
+        </span>
+      </button>
+      <button className="project-remove" onClick={onRemove} title={`Remove ${component.name}`} aria-label={`Remove ${component.name}`}>
+        ×
+      </button>
+    </div>
+  )
+}
+
+function ProjectComponentForm({ onDone }: { onDone: () => void }) {
+  const addProjectComponent = useEditorStore((state) => state.addProjectComponent)
+  const [name, setName] = useState('')
+  const [importPath, setImportPath] = useState('')
+  const [exportName, setExportName] = useState('')
+  const [defaultProps, setDefaultProps] = useState('{}')
+  const [acceptsChildren, setAcceptsChildren] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = () => {
+    setError('')
+
+    if (!name.trim() || !importPath.trim()) {
+      setError('Name and import path are required.')
+      return
+    }
+
+    let props: Record<string, ComponentPropValue>
+
+    try {
+      const parsed = JSON.parse(defaultProps) as unknown
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error()
+
+      const valid = Object.values(parsed).every(
+        (value) => typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean',
+      )
+
+      if (!valid) throw new Error()
+      props = parsed as Record<string, ComponentPropValue>
+    } catch {
+      setError('Default props must be a flat JSON object with string, number, or boolean values.')
+      return
+    }
+
+    addProjectComponent({
+      name,
+      importPath,
+      exportName: exportName || undefined,
+      defaultProps: props,
+      acceptsChildren,
+    })
+
+    onDone()
+  }
+
+  return (
+    <div className="project-component-form">
+      <label>
+        <span>Name</span>
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Button" />
+      </label>
+      <label>
+        <span>Import path</span>
+        <input value={importPath} onChange={(event) => setImportPath(event.target.value)} placeholder="@/components/ui/button" />
+      </label>
+      <label>
+        <span>Named export</span>
+        <input value={exportName} onChange={(event) => setExportName(event.target.value)} placeholder="Button (blank = default)" />
+      </label>
+      <label>
+        <span>Default props JSON</span>
+        <textarea value={defaultProps} onChange={(event) => setDefaultProps(event.target.value)} rows={3} placeholder='{"variant":"primary"}' />
+      </label>
+      <label className="project-checkbox">
+        <input type="checkbox" checked={acceptsChildren} onChange={(event) => setAcceptsChildren(event.target.checked)} />
+        <span>Accepts children</span>
+      </label>
+      {error && <p className="project-form-error">{error}</p>}
+      <div className="project-form-actions">
+        <button className="ghost-button" onClick={onDone}>Cancel</button>
+        <button className="primary-button" onClick={submit}>Add component</button>
+      </div>
+    </div>
+  )
+}
+
 function LayerNode({ id, depth = 0 }: { id: string; depth?: number }) {
   const node = useEditorStore((state) => state.nodes[id])
   const selectedId = useEditorStore((state) => state.selectedId)
   const selectNode = useEditorStore((state) => state.selectNode)
+  const projectComponents = useEditorStore((state) => state.projectComponents)
+
   if (!node) return null
+
+  const customComponent =
+    node.type === 'component'
+      ? projectComponents.find((component) => component.id === node.props.componentId)
+      : undefined
+  const label = customComponent?.name ?? node.type
 
   return (
     <>
@@ -47,7 +168,7 @@ function LayerNode({ id, depth = 0 }: { id: string; depth?: number }) {
         onClick={() => selectNode(id)}
       >
         <span className="layer-dot" />
-        <span>{node.type}</span>
+        <span>{label}</span>
         <code>{id.slice(0, 5)}</code>
       </button>
       {node.children.map((childId) => (
@@ -59,6 +180,9 @@ function LayerNode({ id, depth = 0 }: { id: string; depth?: number }) {
 
 export function Sidebar() {
   const rootIds = useEditorStore((state) => state.rootIds)
+  const projectComponents = useEditorStore((state) => state.projectComponents)
+  const removeProjectComponent = useEditorStore((state) => state.removeProjectComponent)
+  const [addingComponent, setAddingComponent] = useState(false)
 
   return (
     <aside className="sidebar panel">
@@ -71,6 +195,31 @@ export function Sidebar() {
           {palette.map((item) => (
             <PaletteItem key={item.type} item={item} />
           ))}
+        </div>
+      </section>
+
+      <section className="project-section">
+        <div className="panel-title">
+          <span>Project Components</span>
+          <button className="panel-add-button" onClick={() => setAddingComponent((value) => !value)}>
+            {addingComponent ? 'Close' : '+ Add'}
+          </button>
+        </div>
+
+        {addingComponent && <ProjectComponentForm onDone={() => setAddingComponent(false)} />}
+
+        <div className="project-component-list">
+          {projectComponents.length ? (
+            projectComponents.map((component) => (
+              <ProjectComponentItem
+                key={component.id}
+                component={component}
+                onRemove={() => removeProjectComponent(component.id)}
+              />
+            ))
+          ) : (
+            <p className="empty-small">Register components from your React project, then drag them into the canvas.</p>
+          )}
         </div>
       </section>
 
