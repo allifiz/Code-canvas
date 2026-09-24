@@ -16,12 +16,18 @@ export default function App() {
   const addProjectNode = useEditorStore((state) => state.addProjectNode)
   const addPreset = useEditorStore((state) => state.addPreset)
   const deleteNode = useEditorStore((state) => state.deleteNode)
+  const deleteSelected = useEditorStore((state) => state.deleteSelected)
   const duplicateNode = useEditorStore((state) => state.duplicateNode)
   const copyStyle = useEditorStore((state) => state.copyStyle)
   const pasteStyle = useEditorStore((state) => state.pasteStyle)
   const undo = useEditorStore((state) => state.undo)
   const redo = useEditorStore((state) => state.redo)
   const selectedId = useEditorStore((state) => state.selectedId)
+  const selectedIds = useEditorStore((state) => state.selectedIds)
+  const clearSelection = useEditorStore((state) => state.clearSelection)
+  const groupSelected = useEditorStore((state) => state.groupSelected)
+  const ungroupSelected = useEditorStore((state) => state.ungroupSelected)
+  const nudgeSelected = useEditorStore((state) => state.nudgeSelected)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
   useEffect(() => {
@@ -48,6 +54,13 @@ export default function App() {
         return
       }
 
+      if (mod && event.key.toLowerCase() === 'g' && !isEditing) {
+        event.preventDefault()
+        if (event.shiftKey) ungroupSelected()
+        else groupSelected()
+        return
+      }
+
       if (mod && event.key.toLowerCase() === 'd' && selectedId && !isEditing) {
         event.preventDefault()
         duplicateNode(selectedId)
@@ -66,16 +79,50 @@ export default function App() {
         return
       }
 
-      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedId && !isEditing) {
-        deleteNode(selectedId)
+      if (
+        ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) &&
+        selectedIds.length &&
+        !isEditing
+      ) {
+        event.preventDefault()
+        const distance = event.shiftKey ? 10 : 1
+        if (event.key === 'ArrowLeft') nudgeSelected(-distance, 0)
+        if (event.key === 'ArrowRight') nudgeSelected(distance, 0)
+        if (event.key === 'ArrowUp') nudgeSelected(0, -distance)
+        if (event.key === 'ArrowDown') nudgeSelected(0, distance)
+        return
       }
 
-      if (event.key === 'Escape') setCodeOpen(false)
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedIds.length && !isEditing) {
+        event.preventDefault()
+        deleteSelected()
+        return
+      }
+
+      if (event.key === 'Escape') {
+        if (codeOpen) setCodeOpen(false)
+        else clearSelection()
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [copyStyle, deleteNode, duplicateNode, pasteStyle, redo, selectedId, undo])
+  }, [
+    clearSelection,
+    codeOpen,
+    copyStyle,
+    deleteNode,
+    deleteSelected,
+    duplicateNode,
+    groupSelected,
+    nudgeSelected,
+    pasteStyle,
+    redo,
+    selectedId,
+    selectedIds,
+    undo,
+    ungroupSelected,
+  ])
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
