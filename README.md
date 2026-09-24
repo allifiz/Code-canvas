@@ -6,6 +6,9 @@ CodeCanvas is a source-code-first visual UI builder. Instead of treating the can
 
 ## MVP
 
+- Figma-style File / Edit / Insert / View application menus
+- Layers / Assets sidebar workflow
+- Drag primitives or complete Navbar, Hero, Card, and Login blocks into the canvas
 - Drag components from the palette into the canvas
 - Nest components inside containers
 - Move existing nodes between containers
@@ -15,7 +18,9 @@ CodeCanvas is a source-code-first visual UI builder. Instead of treating the can
 - Register project React components and drag them onto the canvas
 - Generate imports and JSX for registered project components
 - Scan React component folders into an importable manifest
-- Edit layout, component props, and visual properties
+- Edit layout, component props, sizing, spacing, typography, fills, opacity, borders, radius, shadows, overflow, and image fit
+- Copy and paste visual styles between layers
+- Zoom the canvas and toggle the layout grid
 - Switch desktop, tablet, and mobile canvas widths
 - Persist the current document locally
 - Export readable React + Tailwind or standalone HTML + CSS
@@ -64,12 +69,30 @@ npm run build
 - `Ctrl/Cmd + Shift + Z`: redo
 - `Ctrl/Cmd + Y`: redo
 - `Ctrl/Cmd + D`: duplicate selected subtree
+- `Ctrl/Cmd + Alt + C`: copy visual style
+- `Ctrl/Cmd + Alt + V`: paste visual style
 - `Delete / Backspace`: delete selected component
 - `Escape`: close the code modal
 
 ## Document portability
 
 Use **Export** to save the current canvas as a versioned CodeCanvas JSON file, then **Import** to restore it later or move it to another browser.
+
+## Design inspector
+
+Select a layer and use the **Design** tab to edit web-real properties:
+
+- Width, height, min/max constraints
+- Padding and margin per side
+- Flex / grid auto-layout, alignment, gap, overflow
+- Font family, size, weight, line height, tracking, alignment, case, decoration
+- Fill and opacity
+- Border width/style/color
+- Radius per corner
+- Box shadow
+- Image fit and object position
+
+The **Inspect** tab exposes the current node type, ID, child count, import metadata, and raw schema props.
 
 ## Project components
 
@@ -113,13 +136,30 @@ The ZIP includes the generated page, Vite/Tailwind setup, and the original `code
 
 When external Project Components are used, standalone ZIP export is intentionally disabled because CodeCanvas does not have those component source files in the browser. The generated React code still preserves their real imports for integration into the original project.
 
-## Current component palette
+## Current asset library
 
-- Container
+### Blocks
+
+- Navbar
+- Hero
+- Card
+- Login form
+
+### Primitives
+
+- Frame
 - Text
 - Button
 - Input
+- Textarea
+- Link
+- Divider
 - Image
+
+### Project assets
+
+- Registered React components
+- Imported component manifests
 
 ## Roadmap
 
@@ -139,6 +179,13 @@ When external Project Components are used, standalone ZIP export is intentionall
 - [ ] Two-way visual/code editing
 - [ ] Vue generator
 - [x] HTML/CSS generator
+- [x] Advanced design inspector
+- [x] Application menus
+- [x] Blocks / preset sections
+- [x] Canvas zoom and grid
+- [x] Copy / paste visual styles
+- [ ] Drag resize handles
+- [ ] Inline text editing
 - [ ] Design tokens
 - [ ] Component variants
 - [x] Export a standalone React project ZIP for built-in components
