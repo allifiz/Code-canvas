@@ -1,5 +1,16 @@
-export type NodeType = 'container' | 'text' | 'button' | 'input' | 'image'
+export type NodeType = 'container' | 'text' | 'button' | 'input' | 'image' | 'component'
 export type Viewport = 'desktop' | 'tablet' | 'mobile'
+
+export type ComponentPropValue = string | number | boolean
+
+export interface ProjectComponentDefinition {
+  id: string
+  name: string
+  importPath: string
+  exportName?: string
+  defaultProps: Record<string, ComponentPropValue>
+  acceptsChildren: boolean
+}
 
 export interface NodeProps {
   text?: string
@@ -20,6 +31,8 @@ export interface NodeProps {
   fontWeight?: number
   radius?: number
   borderColor?: string
+  componentId?: string
+  componentProps?: Record<string, ComponentPropValue>
 }
 
 export interface CanvasNode {
@@ -32,4 +45,10 @@ export interface CanvasNode {
 export interface CanvasDocument {
   nodes: Record<string, CanvasNode>
   rootIds: string[]
+}
+
+export interface CodeCanvasProject {
+  version: 2
+  document: CanvasDocument
+  projectComponents: ProjectComponentDefinition[]
 }
