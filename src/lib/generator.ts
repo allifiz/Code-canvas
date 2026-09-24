@@ -228,7 +228,7 @@ function renderNode(
 
       const children = node.children
         .map((childId) => nodes[childId])
-        .filter(Boolean)
+        .filter((child): child is CanvasNode => !!child && child.visible !== false)
         .map((child) => renderNode(child, nodes, projectComponents, level + 1))
         .join('\n')
 
@@ -423,7 +423,7 @@ function renderHtmlNode(
       const name = component?.name ?? 'MissingComponent'
       const children = node.children
         .map((childId) => nodes[childId])
-        .filter(Boolean)
+        .filter((child): child is CanvasNode => !!child && child.visible !== false)
         .map((child) => renderHtmlNode(child, nodes, projectComponents, level + 1))
         .join('\n')
 
