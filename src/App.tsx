@@ -13,6 +13,7 @@ export default function App() {
   const [codeOpen, setCodeOpen] = useState(false)
   const addNode = useEditorStore((state) => state.addNode)
   const moveNode = useEditorStore((state) => state.moveNode)
+  const addProjectNode = useEditorStore((state) => state.addProjectNode)
   const deleteNode = useEditorStore((state) => state.deleteNode)
   const undo = useEditorStore((state) => state.undo)
   const redo = useEditorStore((state) => state.redo)
@@ -67,6 +68,10 @@ export default function App() {
 
     if (source?.source === 'palette') {
       addNode(source.type as NodeType, targetParent, targetIndex)
+    }
+
+    if (source?.source === 'project-component') {
+      addProjectNode(source.componentId as string, targetParent, targetIndex)
     }
 
     if (source?.source === 'canvas') {
