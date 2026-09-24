@@ -635,3 +635,14 @@ body.is-resizing * {
 .resize-northwest { top: -5px; left: -5px; cursor: nwse-resize; }
 .resize-northeast { top: -5px; right: -5px; cursor: nesw-resize; }
 .resize-southwest { bottom: -5px; left: -5px; cursor: nesw-resize; }
+
+
+/* marquee selection */
+.selection-marquee {
+  position: fixed;
+  z-index: 90;
+  border: 1px solid #786cf2;
+  background: rgba(112, 95, 246, .11);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+  pointer-events: none;
+}
