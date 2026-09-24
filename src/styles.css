@@ -125,3 +125,37 @@ button { color: inherit; }
 .code-format-switcher { display: flex; padding: 3px; border: 1px solid #292b33; border-radius: 8px; background: #0d0e12; }
 .code-format-switcher button { border: 0; border-radius: 5px; padding: 5px 9px; background: transparent; color: #6f7481; cursor: pointer; font-size: 10px; }
 .code-format-switcher button.active { background: #262932; color: #f4f5f7; }
+
+.project-section { margin-top: 6px; border-top: 1px solid #202229; }
+.panel-add-button { border: 0; background: transparent; color: #8b84f7; cursor: pointer; font-size: 10px; font-weight: 700; }
+.project-component-list { padding: 8px; }
+.project-component-row { display: grid; grid-template-columns: minmax(0, 1fr) 26px; gap: 5px; margin-bottom: 6px; }
+.project-component-item { min-width: 0; display: flex; align-items: center; gap: 9px; min-height: 46px; padding: 7px 8px; border: 1px solid #282a31; border-radius: 8px; background: #15171c; text-align: left; cursor: grab; }
+.project-component-item:hover { border-color: #4a4f60; background: #191c22; }
+.project-component-item.dragging { opacity: .4; }
+.project-component-item > span:last-child { min-width: 0; }
+.project-component-item strong, .project-component-item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-component-item strong { color: #e7e9ef; font-size: 11px; }
+.project-component-item small { margin-top: 2px; color: #626775; font-size: 8px; }
+.project-remove { border: 1px solid #38262a; border-radius: 7px; background: #1b1416; color: #a76570; cursor: pointer; }
+.project-remove:hover { color: #f2a2ae; border-color: #623740; }
+.project-component-form { display: grid; gap: 8px; padding: 10px 12px 12px; border-bottom: 1px solid #202229; background: #0e0f13; }
+.project-component-form label { display: grid; gap: 4px; color: #707583; font-size: 9px; }
+.project-component-form input:not([type='checkbox']), .project-component-form textarea { width: 100%; border: 1px solid #292c34; border-radius: 7px; outline: none; padding: 7px 8px; background: #17191e; color: #e3e5eb; font-size: 10px; }
+.project-component-form input:focus, .project-component-form textarea:focus { border-color: #6258d9; }
+.project-checkbox { display: flex !important; grid-template-columns: auto 1fr; align-items: center; gap: 7px !important; }
+.project-form-error { margin: 0; color: #e88995; font-size: 9px; line-height: 1.4; }
+.project-form-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
+
+.project-node { width: 100%; min-height: 56px; padding: 12px; border: 1px dashed #9aa4b5; border-radius: 10px; background: repeating-linear-gradient(135deg, #f8fafc, #f8fafc 8px, #f1f5f9 8px, #f1f5f9 16px); color: #334155; }
+.project-node.missing { border-color: #fca5a5; background: #fff7f7; color: #991b1b; }
+.project-node.drop-active { box-shadow: inset 0 0 0 2px #6366f1; }
+.project-node-header { display: flex; align-items: center; gap: 9px; }
+.project-node-header strong, .project-node-header small { display: block; }
+.project-node-header strong { color: #0f172a; font-size: 12px; }
+.project-node-header small { margin-top: 2px; color: #64748b; font-size: 9px; }
+.project-node-icon { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: #ede9fe; color: #6d28d9; }
+.project-node-props { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.project-node-props code { padding: 3px 5px; border-radius: 5px; background: #e2e8f0; color: #475569; font-size: 8px; }
+.project-node-children { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #cbd5e1; }
+.inspector-note { margin: 0; color: #626775; font-size: 10px; line-height: 1.5; }
