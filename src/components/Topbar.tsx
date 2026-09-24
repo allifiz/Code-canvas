@@ -32,8 +32,25 @@ const isCanvasDocument = (value: unknown): value is CanvasDocument => {
   const nodes = Object.values(document.nodes)
   if (!nodes.every(isCanvasNode)) return false
   if (!document.rootIds.every((id) => typeof id === 'string' && !!document.nodes?.[id])) return false
+  if (!nodes.every((node) => node.children.every((childId) => !!document.nodes?.[childId]))) return false
 
-  return nodes.every((node) => node.children.every((childId) => !!document.nodes?.[childId]))
+  const visiting = new Set<string>()
+  const visited = new Set<string>()
+
+  const hasCycle = (id: string): boolean => {
+    if (visiting.has(id)) return true
+    if (visited.has(id)) return false
+
+    visiting.add(id)
+    const node = document.nodes?.[id]
+    if (node?.children.some(hasCycle)) return true
+
+    visiting.delete(id)
+    visited.add(id)
+    return false
+  }
+
+  return !Object.keys(document.nodes).some(hasCycle)
 }
 
 export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
