@@ -25,6 +25,9 @@ export default function App() {
   const selectedId = useEditorStore((state) => state.selectedId)
   const selectedIds = useEditorStore((state) => state.selectedIds)
   const clearSelection = useEditorStore((state) => state.clearSelection)
+  const setSelection = useEditorStore((state) => state.setSelection)
+  const rootIds = useEditorStore((state) => state.rootIds)
+  const nodes = useEditorStore((state) => state.nodes)
   const groupSelected = useEditorStore((state) => state.groupSelected)
   const ungroupSelected = useEditorStore((state) => state.ungroupSelected)
   const nudgeSelected = useEditorStore((state) => state.nudgeSelected)
@@ -51,6 +54,17 @@ export default function App() {
       if (mod && event.key.toLowerCase() === 'y' && !isEditing) {
         event.preventDefault()
         redo()
+        return
+      }
+
+      if (mod && event.key.toLowerCase() === 'a' && !isEditing) {
+        event.preventDefault()
+        setSelection(
+          rootIds.filter((id) => {
+            const node = nodes[id]
+            return node && node.visible !== false && !node.locked
+          }),
+        )
         return
       }
 
@@ -120,6 +134,9 @@ export default function App() {
     redo,
     selectedId,
     selectedIds,
+    setSelection,
+    rootIds,
+    nodes,
     undo,
     ungroupSelected,
   ])
