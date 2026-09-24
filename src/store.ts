@@ -210,6 +210,17 @@ export const useEditorStore = create<EditorState>()(
         if (parentId && state.nodes[parentId]?.type !== 'container') return
         if (parentId && collectDescendants(state.nodes, nodeId).has(parentId)) return
 
+        const sourceParentId =
+          state.rootIds.includes(nodeId)
+            ? null
+            : Object.values(state.nodes).find((node) => node.children.includes(nodeId))?.id ?? null
+        const sourceSiblings = sourceParentId ? state.nodes[sourceParentId].children : state.rootIds
+        const sourceIndex = sourceSiblings.indexOf(nodeId)
+        const targetIndex =
+          index !== undefined && sourceParentId === parentId && sourceIndex >= 0 && sourceIndex < index
+            ? index - 1
+            : index
+
         set((current) => {
           const nodes = { ...current.nodes }
           let rootIds = current.rootIds.filter((id) => id !== nodeId)
@@ -227,10 +238,10 @@ export const useEditorStore = create<EditorState>()(
             const parent = nodes[parentId]
             nodes[parentId] = {
               ...parent,
-              children: insertAt(parent.children, nodeId, index),
+              children: insertAt(parent.children, nodeId, targetIndex),
             }
           } else {
-            rootIds = insertAt(rootIds, nodeId, index)
+            rootIds = insertAt(rootIds, nodeId, targetIndex)
           }
 
           return {
