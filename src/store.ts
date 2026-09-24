@@ -527,6 +527,7 @@ interface EditorState extends CanvasDocument {
   toggleNodeVisibility: (nodeId: string) => void
   toggleNodeLock: (nodeId: string) => void
   selectNode: (nodeId: string | null, additive?: boolean) => void
+  setSelection: (nodeIds: string[]) => void
   clearSelection: () => void
   groupSelected: () => void
   ungroupSelected: () => void
@@ -946,6 +947,15 @@ export const useEditorStore = create<EditorState>()(
             selectedId: exists
               ? selectedIds.at(-1) ?? null
               : nodeId,
+          }
+        }),
+
+      setSelection: (nodeIds) =>
+        set((state) => {
+          const selectedIds = nodeIds.filter((id) => !!state.nodes[id])
+          return {
+            selectedIds,
+            selectedId: selectedIds.at(-1) ?? null,
           }
         }),
 
