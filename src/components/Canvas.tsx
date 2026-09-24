@@ -1,13 +1,21 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core'
-import { Fragment, type CSSProperties, type MouseEvent } from 'react'
+import {
+  Fragment,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { useEditorStore } from '../store'
-import type { CanvasNode, ProjectComponentDefinition } from '../types'
+import type { CanvasNode, NodeProps, ProjectComponentDefinition } from '../types'
 
 const viewportWidths = {
   desktop: 1200,
   tablet: 768,
   mobile: 390,
 }
+
+type SizePreview = Pick<NodeProps, 'width' | 'height'>
 
 function shadowValue(node: CanvasNode) {
   const p = node.props
@@ -16,12 +24,12 @@ function shadowValue(node: CanvasNode) {
   return `${p.shadowX ?? 0}px ${p.shadowY ?? 0}px ${p.shadowBlur ?? 0}px ${p.shadowSpread ?? 0}px ${p.shadowColor ?? '#000000'}`
 }
 
-function nodeStyle(node: CanvasNode): CSSProperties {
+function nodeStyle(node: CanvasNode, preview?: SizePreview | null): CSSProperties {
   const p = node.props
 
   const base: CSSProperties = {
-    width: p.width,
-    height: p.height,
+    width: preview?.width ?? p.width,
+    height: preview?.height ?? p.height,
     minWidth: p.minWidth,
     minHeight: p.minHeight,
     maxWidth: p.maxWidth,
@@ -132,7 +140,13 @@ function ChildrenList({
   )
 }
 
-function ContainerContent({ node }: { node: CanvasNode }) {
+function ContainerContent({
+  node,
+  preview,
+}: {
+  node: CanvasNode
+  preview?: SizePreview | null
+}) {
   const { setNodeRef, isOver } = useDroppable({
     id: `drop-${node.id}`,
     data: { parentId: node.id },
@@ -144,7 +158,7 @@ function ContainerContent({ node }: { node: CanvasNode }) {
       : 'column'
 
   return (
-    <div ref={setNodeRef} className={`container-content ${isOver ? 'drop-active' : ''}`} style={nodeStyle(node)}>
+    <div ref={setNodeRef} className={`container-content ${isOver ? 'drop-active' : ''}`} style={nodeStyle(node, preview)}>
       {node.children.length ? (
         <ChildrenList node={node} direction={direction} />
       ) : (
@@ -157,9 +171,11 @@ function ContainerContent({ node }: { node: CanvasNode }) {
 function ProjectComponentContent({
   node,
   component,
+  preview,
 }: {
   node: CanvasNode
   component?: ProjectComponentDefinition
+  preview?: SizePreview | null
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `drop-${node.id}`,
@@ -169,7 +185,7 @@ function ProjectComponentContent({
 
   if (!component) {
     return (
-      <div className="project-node missing" style={nodeStyle(node)}>
+      <div className="project-node missing" style={nodeStyle(node, preview)}>
         <strong>Missing project component</strong>
         <small>Re-register the component used by this node.</small>
       </div>
@@ -182,7 +198,7 @@ function ProjectComponentContent({
     <div
       ref={setNodeRef}
       className={`project-node ${component.acceptsChildren ? 'accepts-children' : ''} ${isOver ? 'drop-active' : ''}`}
-      style={nodeStyle(node)}
+      style={nodeStyle(node, preview)}
     >
       <div className="project-node-header">
         <span className="project-node-icon">◆</span>
@@ -217,7 +233,11 @@ function CanvasItem({ id }: { id: string }) {
   const node = useEditorStore((state) => state.nodes[id])
   const selectedId = useEditorStore((state) => state.selectedId)
   const selectNode = useEditorStore((state) => state.selectNode)
+  const updateNode = useEditorStore((state) => state.updateNode)
+  const zoom = useEditorStore((state) => state.zoom)
   const projectComponents = useEditorStore((state) => state.projectComponents)
+  const [previewSize, setPreviewSize] = useState<SizePreview | null>(null)
+
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `node-${id}`,
     data: { source: 'canvas', nodeId: id },
@@ -230,6 +250,59 @@ function CanvasItem({ id }: { id: string }) {
     selectNode(id)
   }
 
+  const startResize = (
+    mode: 'width' | 'height' | 'both',
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const wrapper = event.currentTarget.parentElement
+    if (!wrapper) return
+
+    const rect = wrapper.getBoundingClientRect()
+    const safeZoom = zoom || 1
+    const startWidth = rect.width / safeZoom
+    const startHeight = rect.height / safeZoom
+    const startX = event.clientX
+    const startY = event.clientY
+    let latest: SizePreview = {}
+
+    document.body.classList.add('is-resizing')
+
+    const move = (pointerEvent: PointerEvent) => {
+      const deltaX = (pointerEvent.clientX - startX) / safeZoom
+      const deltaY = (pointerEvent.clientY - startY) / safeZoom
+      const next: SizePreview = {}
+
+      if (mode === 'width' || mode === 'both') {
+        next.width = `${Math.max(20, Math.round(startWidth + deltaX))}px`
+      }
+
+      if (mode === 'height' || mode === 'both') {
+        next.height = `${Math.max(20, Math.round(startHeight + deltaY))}px`
+      }
+
+      latest = next
+      setPreviewSize(next)
+    }
+
+    const end = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      document.body.classList.remove('is-resizing')
+
+      if (Object.keys(latest).length) {
+        updateNode(id, latest)
+      }
+
+      setPreviewSize(null)
+    }
+
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end, { once: true })
+  }
+
   const transformStyle: CSSProperties | undefined = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined
@@ -237,45 +310,45 @@ function CanvasItem({ id }: { id: string }) {
   const content = (() => {
     switch (node.type) {
       case 'container':
-        return <ContainerContent node={node} />
+        return <ContainerContent node={node} preview={previewSize} />
 
       case 'text':
-        return <div style={nodeStyle(node)}>{node.props.text}</div>
+        return <div style={nodeStyle(node, previewSize)}>{node.props.text}</div>
 
       case 'button':
         return (
-          <button className="canvas-button" style={nodeStyle(node)} type="button">
+          <button className="canvas-button" style={nodeStyle(node, previewSize)} type="button">
             {node.props.text}
           </button>
         )
 
       case 'input':
-        return <input className="canvas-input" style={nodeStyle(node)} placeholder={node.props.placeholder} readOnly />
+        return <input className="canvas-input" style={nodeStyle(node, previewSize)} placeholder={node.props.placeholder} readOnly />
 
       case 'textarea':
-        return <textarea className="canvas-input canvas-textarea" style={nodeStyle(node)} placeholder={node.props.placeholder} readOnly />
+        return <textarea className="canvas-input canvas-textarea" style={nodeStyle(node, previewSize)} placeholder={node.props.placeholder} readOnly />
 
       case 'link':
         return (
           <a
             className="canvas-link"
-            style={nodeStyle(node)}
+            style={nodeStyle(node, previewSize)}
             href={node.props.href ?? '#'}
-            onClick={(event) => event.preventDefault()}
+            onClick={(linkEvent) => linkEvent.preventDefault()}
           >
             {node.props.text}
           </a>
         )
 
       case 'divider':
-        return <div className="canvas-divider" style={nodeStyle(node)} />
+        return <div className="canvas-divider" style={nodeStyle(node, previewSize)} />
 
       case 'image':
-        return <img className="canvas-image" style={nodeStyle(node)} src={node.props.src} alt={node.props.alt ?? ''} />
+        return <img className="canvas-image" style={nodeStyle(node, previewSize)} src={node.props.src} alt={node.props.alt ?? ''} />
 
       case 'component': {
         const component = projectComponents.find((item) => item.id === node.props.componentId)
-        return <ProjectComponentContent node={node} component={component} />
+        return <ProjectComponentContent node={node} component={component} preview={previewSize} />
       }
     }
   })()
@@ -287,10 +360,12 @@ function CanvasItem({ id }: { id: string }) {
         ? 'Frame'
         : node.type
 
+  const isSelected = selectedId === id
+
   return (
     <div
       ref={setNodeRef}
-      className={`canvas-node ${selectedId === id ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
+      className={`canvas-node ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
       style={transformStyle}
       onClick={handleClick}
       {...listeners}
@@ -298,6 +373,26 @@ function CanvasItem({ id }: { id: string }) {
     >
       <span className="node-tag">{componentLabel}</span>
       {content}
+
+      {isSelected && !isDragging && (
+        <>
+          <button
+            className="resize-handle resize-east"
+            aria-label="Resize width"
+            onPointerDown={(event) => startResize('width', event)}
+          />
+          <button
+            className="resize-handle resize-south"
+            aria-label="Resize height"
+            onPointerDown={(event) => startResize('height', event)}
+          />
+          <button
+            className="resize-handle resize-southeast"
+            aria-label="Resize width and height"
+            onPointerDown={(event) => startResize('both', event)}
+          />
+        </>
+      )}
     </div>
   )
 }
@@ -308,6 +403,7 @@ export function Canvas() {
   const zoom = useEditorStore((state) => state.zoom)
   const showGrid = useEditorStore((state) => state.showGrid)
   const selectNode = useEditorStore((state) => state.selectNode)
+
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas-root',
     data: { parentId: null },
