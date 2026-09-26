@@ -9,6 +9,7 @@ export function CodeModal({ onClose }: { onClose: () => void }) {
   const nodes = useEditorStore((state) => state.nodes)
   const rootIds = useEditorStore((state) => state.rootIds)
   const projectComponents = useEditorStore((state) => state.projectComponents)
+  const designSystem = useEditorStore((state) => state.designSystem)
   const [format, setFormat] = useState<CodeFormat>('react')
   const [copied, setCopied] = useState(false)
   const canExportProject = canExportStandaloneProject(nodes)
@@ -16,9 +17,9 @@ export function CodeModal({ onClose }: { onClose: () => void }) {
   const code = useMemo(
     () =>
       format === 'react'
-        ? generateReactCode(nodes, rootIds, projectComponents)
-        : generateHtmlCode(nodes, rootIds, projectComponents),
-    [format, nodes, projectComponents, rootIds],
+        ? generateReactCode(nodes, rootIds, projectComponents, designSystem)
+        : generateHtmlCode(nodes, rootIds, projectComponents, designSystem),
+    [designSystem, format, nodes, projectComponents, rootIds],
   )
 
   const copy = async () => {
@@ -43,7 +44,7 @@ export function CodeModal({ onClose }: { onClose: () => void }) {
       return
     }
 
-    downloadStandaloneProject(nodes, rootIds, projectComponents)
+    downloadStandaloneProject(nodes, rootIds, projectComponents, designSystem)
   }
 
   return (
