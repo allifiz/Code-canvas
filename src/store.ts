@@ -1199,18 +1199,44 @@ export const useEditorStore = create<EditorState>()(
 
       nudgeSelected: (dx, dy) =>
         set((state) => {
-          const selected = state.selectedIds.filter((id) => state.nodes[id] && !state.nodes[id].locked)
+          const selected = state.selectedIds.filter(
+            (id) => state.nodes[id] && !state.nodes[id].locked,
+          )
           if (!selected.length) return state
 
           const nodes = { ...state.nodes }
+
           for (const id of selected) {
             const node = nodes[id]
+
+            if (state.viewport === 'desktop') {
+              nodes[id] = {
+                ...node,
+                props: {
+                  ...node.props,
+                  translateX: (node.props.translateX ?? 0) + dx,
+                  translateY: (node.props.translateY ?? 0) + dy,
+                },
+              }
+              continue
+            }
+
+            const viewport = state.viewport
+            const override = node.responsive?.[viewport] ?? {}
+            const currentX =
+              override.translateX ?? node.props.translateX ?? 0
+            const currentY =
+              override.translateY ?? node.props.translateY ?? 0
+
             nodes[id] = {
               ...node,
-              props: {
-                ...node.props,
-                translateX: (node.props.translateX ?? 0) + dx,
-                translateY: (node.props.translateY ?? 0) + dy,
+              responsive: {
+                ...(node.responsive ?? {}),
+                [viewport]: {
+                  ...override,
+                  translateX: currentX + dx,
+                  translateY: currentY + dy,
+                },
               },
             }
           }
