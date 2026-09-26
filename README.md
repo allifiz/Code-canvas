@@ -20,6 +20,10 @@ CodeCanvas is a source-code-first visual UI builder. Instead of treating the can
 - Scan React component folders into an importable manifest
 - Edit layout, component props, sizing, spacing, typography, fills, opacity, borders, radius, shadows, overflow, and image fit
 - Copy and paste visual styles between layers
+- Reusable color tokens and typography styles
+- Solid and linear-gradient fills
+- Desktop, tablet, and mobile style/layout overrides
+- Right-click canvas context menu for common layer actions
 - Zoom the canvas and toggle the layout grid
 - Resize selected layers from eight canvas handles, with Shift aspect-ratio lock
 - Snap resize edges to nearby layer edges and centers with visual alignment guides
@@ -95,6 +99,8 @@ npm run build
 
 Use **Export** to save the current canvas as a versioned CodeCanvas JSON file, then **Import** to restore it later or move it to another browser.
 
+CodeCanvas v0.5 writes project format **v3**, which includes the document tree, project component registry, responsive overrides, and local design system. Existing v2 projects remain importable and receive the default design system automatically.
+
 ## Interaction workflow
 
 CodeCanvas v0.4 adds design-tool interaction patterns on top of the source-code-first schema:
@@ -111,6 +117,42 @@ CodeCanvas v0.4 adds design-tool interaction patterns on top of the source-code-
 - Resize edges snap to nearby layer edges/centers and show purple alignment guides
 
 Nudging is stored as X/Y translation properties, so it remains represented in React and HTML/CSS exports instead of existing only inside the editor.
+
+## Design system and responsive editing
+
+CodeCanvas v0.5 adds reusable local styles instead of forcing every layer to carry unrelated hard-coded values.
+
+### Color tokens
+
+Create or edit reusable colors such as:
+
+```text
+Brand / Primary  #6366f1
+Surface / Default #ffffff
+Text / Primary   #0f172a
+Text / Muted     #64748b
+```
+
+A layer can reference a token for its fill or text color. Updating the token updates every layer using it.
+
+### Text styles
+
+Typography presets can store font family, size, weight, line height, tracking, and text transform. Existing typography can be saved as a reusable text style from the inspector.
+
+### Gradients
+
+Layers support linear-gradient fills with configurable start color, end color, and angle.
+
+### Responsive overrides
+
+Desktop remains the base style. Switch the editor viewport to **Tablet** or **Mobile** and edit layout/style properties to create breakpoint-specific overrides. Content such as text, image URLs, links, and component props remains global.
+
+Responsive exports use:
+
+- Tablet: 768px–1199px
+- Mobile: up to 767px
+
+React exports use Tailwind responsive variants. HTML exports generate media queries.
 
 ## Design inspector
 
@@ -221,7 +263,12 @@ When external Project Components are used, standalone ZIP export is intentionall
 - [x] Drag resize handles
 - [x] Inline text editing
 - [x] Layer rename / visibility / lock
-- [ ] Design tokens
+- [x] Design tokens
+- [x] Reusable color tokens
+- [x] Reusable typography styles
+- [x] Linear-gradient fills
+- [x] Responsive style/layout overrides
+- [x] Canvas context menu
 - [ ] Component variants
 - [x] Export a standalone React project ZIP for built-in components
 - [ ] Plugin API
