@@ -246,12 +246,22 @@ function CanvasItem({ id }: { id: string }) {
   const designSystem = useEditorStore((state) => state.designSystem)
   const zoom = useEditorStore((state) => state.zoom)
   const projectComponents = useEditorStore((state) => state.projectComponents)
+  const duplicateNode = useEditorStore((state) => state.duplicateNode)
+  const deleteNode = useEditorStore((state) => state.deleteNode)
+  const copyStyle = useEditorStore((state) => state.copyStyle)
+  const pasteStyle = useEditorStore((state) => state.pasteStyle)
+  const copiedStyle = useEditorStore((state) => state.copiedStyle)
+  const toggleNodeVisibility = useEditorStore((state) => state.toggleNodeVisibility)
+  const toggleNodeLock = useEditorStore((state) => state.toggleNodeLock)
+  const groupSelected = useEditorStore((state) => state.groupSelected)
+  const ungroupSelected = useEditorStore((state) => state.ungroupSelected)
   const [previewSize, setPreviewSize] = useState<SizePreview | null>(null)
   const [snapGuide, setSnapGuide] = useState<{ vertical: boolean; horizontal: boolean }>({
     vertical: false,
     horizontal: false,
   })
   const [editingText, setEditingText] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const textEditorRef = useRef<HTMLDivElement>(null)
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -264,6 +274,21 @@ function CanvasItem({ id }: { id: string }) {
     if (!editingText) return
     textEditorRef.current?.focus()
   }, [editingText])
+
+  useEffect(() => {
+    if (!contextMenu) return
+
+    const close = () => setContextMenu(null)
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('blur', close)
+    window.addEventListener('scroll', close, true)
+
+    return () => {
+      window.removeEventListener('pointerdown', close)
+      window.removeEventListener('blur', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [contextMenu])
 
   if (!node || node.visible === false) return null
 
@@ -284,6 +309,25 @@ function CanvasItem({ id }: { id: string }) {
     if (node.locked || node.type !== 'text') return
     selectNode(id)
     setEditingText(true)
+  }
+
+  const handleContextMenu = (event: MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (!selectedIds.includes(id)) {
+      selectNode(id)
+    }
+
+    setContextMenu({
+      x: Math.min(event.clientX, window.innerWidth - 210),
+      y: Math.min(event.clientY, window.innerHeight - 310),
+    })
+  }
+
+  const runContextAction = (action: () => void) => {
+    action()
+    setContextMenu(null)
   }
 
   const startResize = (
@@ -578,6 +622,7 @@ function CanvasItem({ id }: { id: string }) {
       data-canvas-node-locked={node.locked ? 'true' : 'false'}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
       {...listeners}
       {...attributes}
     >
@@ -586,6 +631,65 @@ function CanvasItem({ id }: { id: string }) {
 
       {snapGuide.vertical && <div className="alignment-guide alignment-guide-vertical" aria-hidden="true" />}
       {snapGuide.horizontal && <div className="alignment-guide alignment-guide-horizontal" aria-hidden="true" />}
+
+      {contextMenu && (
+        <div
+          className="canvas-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button onClick={() => runContextAction(() => duplicateNode(id))}>
+            <span>Duplicate</span>
+            <kbd>⌘D</kbd>
+          </button>
+
+          {selectedIds.length > 1 ? (
+            <button onClick={() => runContextAction(groupSelected)}>
+              <span>Group selection</span>
+              <kbd>⌘G</kbd>
+            </button>
+          ) : node.type === 'container' && node.children.length > 0 ? (
+            <button onClick={() => runContextAction(ungroupSelected)}>
+              <span>Ungroup</span>
+              <kbd>⇧⌘G</kbd>
+            </button>
+          ) : null}
+
+          <div className="context-menu-separator" />
+
+          <button onClick={() => runContextAction(() => copyStyle(id))}>
+            <span>Copy style</span>
+            <kbd>⌥⌘C</kbd>
+          </button>
+          <button
+            disabled={!copiedStyle}
+            onClick={() => runContextAction(() => pasteStyle(id))}
+          >
+            <span>Paste style</span>
+            <kbd>⌥⌘V</kbd>
+          </button>
+
+          <div className="context-menu-separator" />
+
+          <button onClick={() => runContextAction(() => toggleNodeVisibility(id))}>
+            <span>{node.visible === false ? 'Show layer' : 'Hide layer'}</span>
+          </button>
+          <button onClick={() => runContextAction(() => toggleNodeLock(id))}>
+            <span>{node.locked ? 'Unlock layer' : 'Lock layer'}</span>
+          </button>
+
+          <div className="context-menu-separator" />
+
+          <button
+            className="danger"
+            onClick={() => runContextAction(() => deleteNode(id))}
+          >
+            <span>Delete</span>
+            <kbd>⌫</kbd>
+          </button>
+        </div>
+      )}
 
       {isPrimarySelection && selectedIds.length === 1 && !isDragging && !node.locked && !editingText && (
         <>
