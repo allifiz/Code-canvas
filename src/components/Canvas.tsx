@@ -673,7 +673,7 @@ function CanvasItem({ id }: { id: string }) {
           <div className="context-menu-separator" />
 
           <button onClick={() => runContextAction(() => toggleNodeVisibility(id))}>
-            <span>{node.visible === false ? 'Show layer' : 'Hide layer'}</span>
+            <span>Hide layer</span>
           </button>
           <button onClick={() => runContextAction(() => toggleNodeLock(id))}>
             <span>{node.locked ? 'Unlock layer' : 'Lock layer'}</span>
