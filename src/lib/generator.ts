@@ -1,9 +1,12 @@
 import type {
   CanvasNode,
   ComponentPropValue,
+  DesignSystem,
   NodeProps,
   ProjectComponentDefinition,
+  ResponsiveViewport,
 } from '../types'
+import { defaultDesignSystem, effectiveNodeProps } from './designSystem'
 
 const indent = (level: number) => '  '.repeat(level)
 const quote = (value = '') => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -11,6 +14,10 @@ const quote = (value = '') => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 function arbitrary(prefix: string, value?: string | number, unit = '') {
   if (value === undefined || value === '') return ''
   return `${prefix}-[${value}${unit}]`
+}
+
+function arbitraryValue(value: string) {
+  return value.replace(/\s+/g, '_')
 }
 
 function widthClass(width?: string) {
@@ -30,7 +37,9 @@ function heightClass(height?: string) {
 function classes(props: NodeProps, type: CanvasNode['type']) {
   const result: string[] = []
 
-  if (type === 'container') {
+  if (props.display === 'none') result.push('hidden')
+
+  if (type === 'container' && props.display !== 'none') {
     if (props.display === 'flex') {
       result.push('flex', props.direction === 'row' ? 'flex-row' : 'flex-col')
       const alignMap = {
@@ -53,7 +62,9 @@ function classes(props: NodeProps, type: CanvasNode['type']) {
 
     if (props.display === 'grid') {
       result.push('grid')
-      if (props.gridColumns) result.push(`grid-cols-${Math.max(1, Math.min(12, props.gridColumns))}`)
+      if (props.gridColumns) {
+        result.push(`grid-cols-${Math.max(1, Math.min(12, props.gridColumns))}`)
+      }
     }
 
     if (props.display === 'block') result.push('block')
@@ -64,13 +75,14 @@ function classes(props: NodeProps, type: CanvasNode['type']) {
   if (width) result.push(width)
   if (height) result.push(height)
 
-  const dimensionalClasses = [
-    arbitrary('min-w', props.minWidth),
-    props.minHeight !== undefined ? arbitrary('min-h', props.minHeight, 'px') : '',
-    arbitrary('max-w', props.maxWidth),
-    arbitrary('max-h', props.maxHeight),
-  ].filter(Boolean)
-  result.push(...dimensionalClasses)
+  result.push(
+    ...[
+      arbitrary('min-w', props.minWidth),
+      props.minHeight !== undefined ? arbitrary('min-h', props.minHeight, 'px') : '',
+      arbitrary('max-w', props.maxWidth),
+      arbitrary('max-h', props.maxHeight),
+    ].filter(Boolean),
+  )
 
   if (props.gap !== undefined) result.push(arbitrary('gap', props.gap, 'px'))
 
@@ -78,6 +90,7 @@ function classes(props: NodeProps, type: CanvasNode['type']) {
   const pr = props.paddingRight ?? props.padding
   const pb = props.paddingBottom ?? props.padding
   const pl = props.paddingLeft ?? props.padding
+
   if (pt !== undefined) result.push(arbitrary('pt', pt, 'px'))
   if (pr !== undefined) result.push(arbitrary('pr', pr, 'px'))
   if (pb !== undefined) result.push(arbitrary('pb', pb, 'px'))
@@ -92,27 +105,52 @@ function classes(props: NodeProps, type: CanvasNode['type']) {
   const rtr = props.radiusTopRight ?? props.radius
   const rbr = props.radiusBottomRight ?? props.radius
   const rbl = props.radiusBottomLeft ?? props.radius
+
   if (rtl !== undefined) result.push(arbitrary('rounded-tl', rtl, 'px'))
   if (rtr !== undefined) result.push(arbitrary('rounded-tr', rtr, 'px'))
   if (rbr !== undefined) result.push(arbitrary('rounded-br', rbr, 'px'))
   if (rbl !== undefined) result.push(arbitrary('rounded-bl', rbl, 'px'))
 
-  if (props.background && props.background !== 'transparent') result.push(`bg-[${props.background}]`)
+  if (
+    props.fillType === 'linear-gradient' &&
+    props.gradientFrom &&
+    props.gradientTo
+  ) {
+    const gradient = `linear-gradient(${props.gradientAngle ?? 90}deg, ${props.gradientFrom}, ${props.gradientTo})`
+    result.push(`bg-[${arbitraryValue(gradient)}]`)
+  } else if (props.background && props.background !== 'transparent') {
+    result.push(`bg-[${props.background}]`)
+  }
+
   if (props.color) result.push(`text-[${props.color}]`)
   if (props.opacity !== undefined) result.push(`opacity-[${props.opacity}]`)
 
+  if (props.fontFamily) {
+    result.push(`font-[${arbitraryValue(props.fontFamily)}]`)
+  }
   if (props.fontSize !== undefined) result.push(arbitrary('text', props.fontSize, 'px'))
   if (props.fontWeight !== undefined) result.push(`font-[${props.fontWeight}]`)
   if (props.lineHeight !== undefined) result.push(`leading-[${props.lineHeight}]`)
-  if (props.letterSpacing !== undefined) result.push(arbitrary('tracking', props.letterSpacing, 'px'))
+  if (props.letterSpacing !== undefined) {
+    result.push(arbitrary('tracking', props.letterSpacing, 'px'))
+  }
 
   if (props.textAlign) {
-    const map = { left: 'text-left', center: 'text-center', right: 'text-right', justify: 'text-justify' }
+    const map = {
+      left: 'text-left',
+      center: 'text-center',
+      right: 'text-right',
+      justify: 'text-justify',
+    }
     result.push(map[props.textAlign])
   }
 
   if (props.textTransform && props.textTransform !== 'none') {
-    const map = { uppercase: 'uppercase', lowercase: 'lowercase', capitalize: 'capitalize' }
+    const map = {
+      uppercase: 'uppercase',
+      lowercase: 'lowercase',
+      capitalize: 'capitalize',
+    }
     result.push(map[props.textTransform])
   }
 
@@ -129,43 +167,77 @@ function classes(props: NodeProps, type: CanvasNode['type']) {
 
   if (props.overflow && props.overflow !== 'visible') {
     result.push(
-      props.overflow === 'hidden' ? 'overflow-hidden' :
-      props.overflow === 'auto' ? 'overflow-auto' : 'overflow-scroll',
+      props.overflow === 'hidden'
+        ? 'overflow-hidden'
+        : props.overflow === 'auto'
+          ? 'overflow-auto'
+          : 'overflow-scroll',
     )
   }
 
-  if (type === 'image' && props.objectFit) {
-    const map = { cover: 'object-cover', contain: 'object-contain', fill: 'object-fill', none: 'object-none' }
-    result.push(map[props.objectFit])
+  if (props.shadowX || props.shadowY || props.shadowBlur || props.shadowSpread) {
+    const shadow = `${props.shadowX ?? 0}px ${props.shadowY ?? 0}px ${props.shadowBlur ?? 0}px ${props.shadowSpread ?? 0}px ${props.shadowColor ?? '#000000'}`
+    result.push(`shadow-[${arbitraryValue(shadow)}]`)
   }
 
-  return result.filter(Boolean).join(' ')
+  if (props.translateX) result.push(arbitrary('translate-x', props.translateX, 'px'))
+  if (props.translateY) result.push(arbitrary('translate-y', props.translateY, 'px'))
+
+  if (type === 'image') {
+    if (props.objectFit) {
+      const map = {
+        cover: 'object-cover',
+        contain: 'object-contain',
+        fill: 'object-fill',
+        none: 'object-none',
+      }
+      result.push(map[props.objectFit])
+    }
+
+    if (props.objectPosition) {
+      result.push(`object-[${arbitraryValue(props.objectPosition)}]`)
+    }
+  }
+
+  return result.filter(Boolean)
 }
 
-function inlineStyle(props: NodeProps) {
-  const pairs: string[] = []
+function prefixedClasses(
+  props: NodeProps,
+  type: CanvasNode['type'],
+  prefix?: string,
+) {
+  return classes(props, type)
+    .map((className) => (prefix ? `${prefix}${className}` : className))
+    .join(' ')
+}
 
-  if (props.fontFamily) pairs.push(`fontFamily: ${JSON.stringify(props.fontFamily)}`)
-
-  const hasShadow = !!(
-    props.shadowX ||
-    props.shadowY ||
-    props.shadowBlur ||
-    props.shadowSpread
+function responsiveReactClasses(
+  node: CanvasNode,
+  designSystem: DesignSystem,
+) {
+  const base = prefixedClasses(
+    effectiveNodeProps(node, 'desktop', designSystem),
+    node.type,
   )
 
-  if (hasShadow) {
-    const value = `${props.shadowX ?? 0}px ${props.shadowY ?? 0}px ${props.shadowBlur ?? 0}px ${props.shadowSpread ?? 0}px ${props.shadowColor ?? '#000000'}`
-    pairs.push(`boxShadow: ${JSON.stringify(value)}`)
-  }
+  const tablet = node.responsive?.tablet
+    ? prefixedClasses(
+        effectiveNodeProps(node, 'tablet', designSystem),
+        node.type,
+        'min-[768px]:max-[1199px]:',
+      )
+    : ''
 
-  if (props.objectPosition) pairs.push(`objectPosition: ${JSON.stringify(props.objectPosition)}`)
+  const mobile = node.responsive?.mobile
+    ? prefixedClasses(
+        effectiveNodeProps(node, 'mobile', designSystem),
+        node.type,
+        'max-[767px]:',
+      )
+    : ''
 
-  if (props.translateX || props.translateY) {
-    pairs.push(`transform: ${JSON.stringify(`translate(${props.translateX ?? 0}px, ${props.translateY ?? 0}px)`)}`)
-  }
-
-  return pairs.length ? ` style={{ ${pairs.join(', ')} }}` : ''
+  return [base, tablet, mobile].filter(Boolean).join(' ')
 }
 
 function renderComponentProp(key: string, value: ComponentPropValue) {
@@ -176,67 +248,85 @@ function renderNode(
   node: CanvasNode,
   nodes: Record<string, CanvasNode>,
   projectComponents: ProjectComponentDefinition[],
+  designSystem: DesignSystem,
   level: number,
 ): string {
   const pad = indent(level)
-  const className = classes(node.props, node.type)
+  const props = effectiveNodeProps(node, 'desktop', designSystem)
+  const className = responsiveReactClasses(node, designSystem)
   const classAttr = className ? ` className="${className}"` : ''
-  const styleAttr = inlineStyle(node.props)
 
   switch (node.type) {
     case 'container': {
-      if (!node.children.length) return `${pad}<div${classAttr}${styleAttr} />`
+      if (!node.children.length) return `${pad}<div${classAttr} />`
+
       const children = node.children
         .map((childId) => nodes[childId])
         .filter((child): child is CanvasNode => !!child && child.visible !== false)
-        .map((child) => renderNode(child, nodes, projectComponents, level + 1))
+        .map((child) =>
+          renderNode(child, nodes, projectComponents, designSystem, level + 1),
+        )
         .join('\n')
-      return `${pad}<div${classAttr}${styleAttr}>\n${children}\n${pad}</div>`
+
+      return `${pad}<div${classAttr}>\n${children}\n${pad}</div>`
     }
 
     case 'text':
-      return `${pad}<p${classAttr}${styleAttr}>{${JSON.stringify(node.props.text ?? '')}}</p>`
+      return `${pad}<p${classAttr}>{${JSON.stringify(node.props.text ?? '')}}</p>`
 
     case 'button':
-      return `${pad}<button type="button"${classAttr}${styleAttr}>{${JSON.stringify(node.props.text ?? '')}}</button>`
+      return `${pad}<button type="button"${classAttr}>{${JSON.stringify(node.props.text ?? '')}}</button>`
 
     case 'input':
-      return `${pad}<input placeholder="${quote(node.props.placeholder)}"${classAttr}${styleAttr} />`
+      return `${pad}<input placeholder="${quote(node.props.placeholder)}"${classAttr} />`
 
     case 'textarea':
-      return `${pad}<textarea placeholder="${quote(node.props.placeholder)}"${classAttr}${styleAttr} />`
+      return `${pad}<textarea placeholder="${quote(node.props.placeholder)}"${classAttr} />`
 
     case 'link':
-      return `${pad}<a href="${quote(node.props.href ?? '#')}"${classAttr}${styleAttr}>{${JSON.stringify(node.props.text ?? '')}}</a>`
+      return `${pad}<a href="${quote(node.props.href ?? '#')}"${classAttr}>{${JSON.stringify(node.props.text ?? '')}}</a>`
 
     case 'divider':
-      return `${pad}<div aria-hidden="true"${classAttr}${styleAttr} />`
+      return `${pad}<div aria-hidden="true"${classAttr} />`
 
     case 'image':
-      return `${pad}<img src="${quote(node.props.src)}" alt="${quote(node.props.alt)}"${classAttr}${styleAttr} />`
+      return `${pad}<img src="${quote(node.props.src)}" alt="${quote(node.props.alt)}"${classAttr} />`
 
     case 'component': {
-      const component = projectComponents.find((item) => item.id === node.props.componentId)
-      if (!component) return `${pad}{/* Missing project component: ${node.props.componentId ?? 'unknown'} */}`
+      const component = projectComponents.find(
+        (item) => item.id === props.componentId,
+      )
+
+      if (!component) {
+        return `${pad}{/* Missing project component: ${props.componentId ?? 'unknown'} */}`
+      }
 
       const componentProps = Object.entries(node.props.componentProps ?? {})
         .map(([key, value]) => renderComponentProp(key, value))
         .join(' ')
 
-      const extraAttrs = [componentProps, classAttr.trim(), styleAttr.trim()].filter(Boolean).join(' ')
-      const attrs = extraAttrs ? ` ${extraAttrs}` : ''
+      const attrs = [
+        componentProps,
+        classAttr.trim(),
+      ]
+        .filter(Boolean)
+        .join(' ')
+
+      const attrText = attrs ? ` ${attrs}` : ''
 
       if (!component.acceptsChildren || !node.children.length) {
-        return `${pad}<${component.name}${attrs} />`
+        return `${pad}<${component.name}${attrText} />`
       }
 
       const children = node.children
         .map((childId) => nodes[childId])
         .filter((child): child is CanvasNode => !!child && child.visible !== false)
-        .map((child) => renderNode(child, nodes, projectComponents, level + 1))
+        .map((child) =>
+          renderNode(child, nodes, projectComponents, designSystem, level + 1),
+        )
         .join('\n')
 
-      return `${pad}<${component.name}${attrs}>\n${children}\n${pad}</${component.name}>`
+      return `${pad}<${component.name}${attrText}>\n${children}\n${pad}</${component.name}>`
     }
   }
 }
@@ -246,7 +336,11 @@ function componentImport(component: ProjectComponentDefinition) {
     return `import ${component.name} from "${quote(component.importPath)}"`
   }
 
-  const alias = component.exportName === component.name ? '' : ` as ${component.name}`
+  const alias =
+    component.exportName === component.name
+      ? ''
+      : ` as ${component.name}`
+
   return `import { ${component.exportName}${alias} } from "${quote(component.importPath)}"`
 }
 
@@ -254,6 +348,7 @@ export function generateReactCode(
   nodes: Record<string, CanvasNode>,
   rootIds: string[],
   projectComponents: ProjectComponentDefinition[] = [],
+  designSystem: DesignSystem = defaultDesignSystem,
 ) {
   const usedComponentIds = new Set(
     Object.values(nodes)
@@ -270,7 +365,9 @@ export function generateReactCode(
   const body = rootIds
     .map((id) => nodes[id])
     .filter((node): node is CanvasNode => !!node && node.visible !== false)
-    .map((node) => renderNode(node, nodes, projectComponents, 3))
+    .map((node) =>
+      renderNode(node, nodes, projectComponents, designSystem, 3),
+    )
     .join('\n')
 
   const importBlock = imports ? `${imports}\n\n` : ''
@@ -286,21 +383,33 @@ const escapeHtml = (value = '') =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;')
 
-const cssValue = (value: number | string | undefined, unit = 'px') =>
-  value === undefined ? null : typeof value === 'number' ? `${value}${unit}` : value
+const cssValue = (
+  value: number | string | undefined,
+  unit = 'px',
+) =>
+  value === undefined
+    ? null
+    : typeof value === 'number'
+      ? `${value}${unit}`
+      : value
 
 function htmlClass(node: CanvasNode) {
   return `cc-${node.type}-${node.id.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 8)}`
 }
 
-function cssRules(node: CanvasNode) {
-  const p = node.props
+function cssDeclarations(node: CanvasNode, p: NodeProps) {
   const declarations: string[] = ['box-sizing: border-box']
 
-  const assign = (property: string, value: string | number | null | undefined) => {
-    if (value !== undefined && value !== null && value !== '') declarations.push(`${property}: ${value}`)
+  const assign = (
+    property: string,
+    value: string | number | null | undefined,
+  ) => {
+    if (value !== undefined && value !== null && value !== '') {
+      declarations.push(`${property}: ${value}`)
+    }
   }
 
+  assign('display', p.display === 'none' ? 'none' : undefined)
   assign('width', cssValue(p.width, ''))
   assign('height', cssValue(p.height, ''))
   assign('min-width', cssValue(p.minWidth, ''))
@@ -319,10 +428,25 @@ function cssRules(node: CanvasNode) {
   assign('margin-left', cssValue(p.marginLeft))
 
   if (p.translateX || p.translateY) {
-    assign('transform', `translate(${p.translateX ?? 0}px, ${p.translateY ?? 0}px)`)
+    assign(
+      'transform',
+      `translate(${p.translateX ?? 0}px, ${p.translateY ?? 0}px)`,
+    )
   }
 
-  assign('background', p.background)
+  if (
+    p.fillType === 'linear-gradient' &&
+    p.gradientFrom &&
+    p.gradientTo
+  ) {
+    assign(
+      'background',
+      `linear-gradient(${p.gradientAngle ?? 90}deg, ${p.gradientFrom}, ${p.gradientTo})`,
+    )
+  } else {
+    assign('background', p.background)
+  }
+
   assign('color', p.color)
   assign('opacity', p.opacity)
 
@@ -332,13 +456,35 @@ function cssRules(node: CanvasNode) {
   assign('line-height', p.lineHeight)
   assign('letter-spacing', cssValue(p.letterSpacing))
   assign('text-align', p.textAlign)
-  assign('text-transform', p.textTransform && p.textTransform !== 'none' ? p.textTransform : undefined)
-  assign('text-decoration', p.textDecoration && p.textDecoration !== 'none' ? p.textDecoration : undefined)
+  assign(
+    'text-transform',
+    p.textTransform && p.textTransform !== 'none'
+      ? p.textTransform
+      : undefined,
+  )
+  assign(
+    'text-decoration',
+    p.textDecoration && p.textDecoration !== 'none'
+      ? p.textDecoration
+      : undefined,
+  )
 
-  assign('border-top-left-radius', cssValue(p.radiusTopLeft ?? p.radius))
-  assign('border-top-right-radius', cssValue(p.radiusTopRight ?? p.radius))
-  assign('border-bottom-right-radius', cssValue(p.radiusBottomRight ?? p.radius))
-  assign('border-bottom-left-radius', cssValue(p.radiusBottomLeft ?? p.radius))
+  assign(
+    'border-top-left-radius',
+    cssValue(p.radiusTopLeft ?? p.radius),
+  )
+  assign(
+    'border-top-right-radius',
+    cssValue(p.radiusTopRight ?? p.radius),
+  )
+  assign(
+    'border-bottom-right-radius',
+    cssValue(p.radiusBottomRight ?? p.radius),
+  )
+  assign(
+    'border-bottom-left-radius',
+    cssValue(p.radiusBottomLeft ?? p.radius),
+  )
 
   if ((p.borderWidth ?? 0) > 0 && p.borderStyle !== 'none') {
     assign('border-width', cssValue(p.borderWidth ?? 1))
@@ -355,7 +501,7 @@ function cssRules(node: CanvasNode) {
 
   assign('overflow', p.overflow)
 
-  if (node.type === 'container') {
+  if (node.type === 'container' && p.display !== 'none') {
     assign('display', p.display)
 
     if (p.display === 'flex') {
@@ -366,22 +512,70 @@ function cssRules(node: CanvasNode) {
     }
 
     if (p.display === 'grid') {
-      assign('grid-template-columns', `repeat(${Math.max(1, p.gridColumns ?? 2)}, minmax(0, 1fr))`)
+      assign(
+        'grid-template-columns',
+        `repeat(${Math.max(1, p.gridColumns ?? 2)}, minmax(0, 1fr))`,
+      )
       assign('gap', cssValue(p.gap))
     }
   }
 
   if (node.type === 'text') declarations.push('margin: 0')
   if (node.type === 'button') declarations.push('cursor: pointer')
+
   if (node.type === 'image') {
     declarations.push('display: block')
     assign('object-fit', p.objectFit)
     assign('object-position', p.objectPosition)
   }
-  if (node.type === 'input' || node.type === 'textarea') declarations.push('display: block')
+
+  if (node.type === 'input' || node.type === 'textarea') {
+    declarations.push('display: block')
+  }
+
   if (node.type === 'link') declarations.push('display: inline-block')
 
-  return `.${htmlClass(node)} {\n${declarations.map((item) => `  ${item};`).join('\n')}\n}`
+  return declarations
+}
+
+function cssRule(
+  node: CanvasNode,
+  props: NodeProps,
+  indentation = '',
+) {
+  const declarations = cssDeclarations(node, props)
+  return `${indentation}.${htmlClass(node)} {\n${declarations
+    .map((item) => `${indentation}  ${item};`)
+    .join('\n')}\n${indentation}}`
+}
+
+function responsiveCss(
+  nodes: Record<string, CanvasNode>,
+  designSystem: DesignSystem,
+  viewport: ResponsiveViewport,
+) {
+  const matching = Object.values(nodes).filter(
+    (node) => node.responsive?.[viewport],
+  )
+
+  if (!matching.length) return ''
+
+  const query =
+    viewport === 'mobile'
+      ? '(max-width: 767px)'
+      : '(min-width: 768px) and (max-width: 1199px)'
+
+  const rules = matching
+    .map((node) =>
+      cssRule(
+        node,
+        effectiveNodeProps(node, viewport, designSystem),
+        '  ',
+      ),
+    )
+    .join('\n\n')
+
+  return `@media ${query} {\n${rules}\n}`
 }
 
 function renderHtmlNode(
@@ -398,7 +592,9 @@ function renderHtmlNode(
       const children = node.children
         .map((childId) => nodes[childId])
         .filter((child): child is CanvasNode => !!child && child.visible !== false)
-        .map((child) => renderHtmlNode(child, nodes, projectComponents, level + 1))
+        .map((child) =>
+          renderHtmlNode(child, nodes, projectComponents, level + 1),
+        )
         .join('\n')
 
       if (!children) return `${pad}<div class="${className}"></div>`
@@ -427,12 +623,17 @@ function renderHtmlNode(
       return `${pad}<img class="${className}" src="${escapeHtml(node.props.src)}" alt="${escapeHtml(node.props.alt)}" />`
 
     case 'component': {
-      const component = projectComponents.find((item) => item.id === node.props.componentId)
+      const component = projectComponents.find(
+        (item) => item.id === node.props.componentId,
+      )
       const name = component?.name ?? 'MissingComponent'
+
       const children = node.children
         .map((childId) => nodes[childId])
         .filter((child): child is CanvasNode => !!child && child.visible !== false)
-        .map((child) => renderHtmlNode(child, nodes, projectComponents, level + 1))
+        .map((child) =>
+          renderHtmlNode(child, nodes, projectComponents, level + 1),
+        )
         .join('\n')
 
       if (!children) {
@@ -448,14 +649,33 @@ export function generateHtmlCode(
   nodes: Record<string, CanvasNode>,
   rootIds: string[],
   projectComponents: ProjectComponentDefinition[] = [],
+  designSystem: DesignSystem = defaultDesignSystem,
 ) {
-  const orderedNodes = Object.values(nodes)
-  const styles = orderedNodes.map(cssRules).join('\n\n')
+  const baseStyles = Object.values(nodes)
+    .map((node) =>
+      cssRule(
+        node,
+        effectiveNodeProps(node, 'desktop', designSystem),
+      ),
+    )
+    .join('\n\n')
+
+  const responsiveStyles = (
+    ['tablet', 'mobile'] as ResponsiveViewport[]
+  )
+    .map((viewport) => responsiveCss(nodes, designSystem, viewport))
+    .filter(Boolean)
+    .join('\n\n')
+
   const body = rootIds
     .map((id) => nodes[id])
     .filter((node): node is CanvasNode => !!node && node.visible !== false)
-    .map((node) => renderHtmlNode(node, nodes, projectComponents, 2))
+    .map((node) =>
+      renderHtmlNode(node, nodes, projectComponents, 2),
+    )
     .join('\n')
+
+  const styles = [baseStyles, responsiveStyles].filter(Boolean).join('\n\n')
 
   return `<!doctype html>
 <html lang="en">
