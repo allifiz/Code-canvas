@@ -4,12 +4,16 @@ import type {
   CanvasDocument,
   CanvasNode,
   ComponentPropValue,
+  DesignSystem,
   NodeProps,
   NodeType,
   PresetType,
   ProjectComponentDefinition,
+  ResponsiveViewport,
+  TextStyleValue,
   Viewport,
 } from './types'
+import { defaultDesignSystem } from './lib/designSystem'
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -500,6 +504,7 @@ interface EditorState extends CanvasDocument {
   zoom: number
   showGrid: boolean
   projectComponents: ProjectComponentDefinition[]
+  designSystem: DesignSystem
   copiedStyle: Partial<NodeProps> | null
   past: DocumentSnapshot[]
   future: DocumentSnapshot[]
@@ -518,6 +523,12 @@ interface EditorState extends CanvasDocument {
   replaceProjectComponents: (components: ProjectComponentDefinition[]) => void
   moveNode: (nodeId: string, parentId: string | null, index?: number) => void
   updateNode: (nodeId: string, props: Partial<NodeProps>) => void
+  updateNodeForViewport: (nodeId: string, viewport: Viewport, props: Partial<NodeProps>) => void
+  clearResponsiveOverrides: (nodeId: string, viewport: ResponsiveViewport) => void
+  addColorToken: (name: string, value: string) => string
+  updateColorToken: (id: string, patch: Partial<{ name: string; value: string }>) => void
+  addTextStyleToken: (name: string, value: TextStyleValue) => string
+  updateTextStyleToken: (id: string, patch: Partial<{ name: string; value: TextStyleValue }>) => void
   deleteNode: (nodeId: string) => void
   deleteSelected: () => void
   duplicateNode: (nodeId: string) => void
@@ -537,7 +548,11 @@ interface EditorState extends CanvasDocument {
   toggleGrid: () => void
   loadDemo: () => void
   loadDocument: (document: CanvasDocument) => void
-  loadProject: (document: CanvasDocument, components: ProjectComponentDefinition[]) => void
+  loadProject: (
+    document: CanvasDocument,
+    components: ProjectComponentDefinition[],
+    designSystem?: DesignSystem,
+  ) => void
   clearCanvas: () => void
   undo: () => void
   redo: () => void
@@ -651,6 +666,7 @@ export const useEditorStore = create<EditorState>()(
       zoom: 0.8,
       showGrid: true,
       projectComponents: [],
+      designSystem: structuredClone(defaultDesignSystem),
       copiedStyle: null,
       past: [],
       future: [],
@@ -765,6 +781,116 @@ export const useEditorStore = create<EditorState>()(
             ...pushHistory(state),
           }
         }),
+
+      updateNodeForViewport: (nodeId, viewport, props) =>
+        set((state) => {
+          const node = state.nodes[nodeId]
+          if (!node) return state
+
+          if (viewport === 'desktop') {
+            return {
+              nodes: {
+                ...state.nodes,
+                [nodeId]: {
+                  ...node,
+                  props: { ...node.props, ...props },
+                },
+              },
+              ...pushHistory(state),
+            }
+          }
+
+          const responsive = {
+            ...(node.responsive ?? {}),
+            [viewport]: {
+              ...(node.responsive?.[viewport] ?? {}),
+              ...props,
+            },
+          }
+
+          return {
+            nodes: {
+              ...state.nodes,
+              [nodeId]: {
+                ...node,
+                responsive,
+              },
+            },
+            ...pushHistory(state),
+          }
+        }),
+
+      clearResponsiveOverrides: (nodeId, viewport) =>
+        set((state) => {
+          const node = state.nodes[nodeId]
+          if (!node?.responsive?.[viewport]) return state
+          const responsive = { ...node.responsive }
+          delete responsive[viewport]
+
+          return {
+            nodes: {
+              ...state.nodes,
+              [nodeId]: {
+                ...node,
+                responsive,
+              },
+            },
+            ...pushHistory(state),
+          }
+        }),
+
+      addColorToken: (name, value) => {
+        const id = `color-${uid()}`
+        set((state) => ({
+          designSystem: {
+            ...state.designSystem,
+            colors: [...state.designSystem.colors, { id, name: name.trim() || 'Color', value }],
+          },
+        }))
+        return id
+      },
+
+      updateColorToken: (id, patch) =>
+        set((state) => ({
+          designSystem: {
+            ...state.designSystem,
+            colors: state.designSystem.colors.map((token) =>
+              token.id === id ? { ...token, ...patch } : token,
+            ),
+          },
+        })),
+
+      addTextStyleToken: (name, value) => {
+        const id = `text-${uid()}`
+        set((state) => ({
+          designSystem: {
+            ...state.designSystem,
+            textStyles: [
+              ...state.designSystem.textStyles,
+              { id, name: name.trim() || 'Text style', value: structuredClone(value) },
+            ],
+          },
+        }))
+        return id
+      },
+
+      updateTextStyleToken: (id, patch) =>
+        set((state) => ({
+          designSystem: {
+            ...state.designSystem,
+            textStyles: state.designSystem.textStyles.map((token) =>
+              token.id === id
+                ? {
+                    ...token,
+                    ...(patch.name !== undefined ? { name: patch.name } : {}),
+                    ...(patch.value !== undefined
+                      ? { value: { ...token.value, ...patch.value } }
+                      : {}),
+                  }
+                : token,
+            ),
+          },
+        })),
 
       deleteNode: (nodeId) =>
         set((state) => {
@@ -1119,12 +1245,14 @@ export const useEditorStore = create<EditorState>()(
           ...pushHistory(state),
         })),
 
-      loadProject: (document, projectComponents) =>
+      loadProject: (document, projectComponents, designSystem = defaultDesignSystem) =>
         set((state) => ({
           nodes: structuredClone(document.nodes),
           rootIds: [...document.rootIds],
           projectComponents: structuredClone(projectComponents),
+          designSystem: structuredClone(designSystem),
           selectedId: null,
+          selectedIds: [],
           ...pushHistory(state),
         })),
 
@@ -1174,6 +1302,7 @@ export const useEditorStore = create<EditorState>()(
         zoom: state.zoom,
         showGrid: state.showGrid,
         projectComponents: state.projectComponents,
+        designSystem: state.designSystem,
       }),
     },
   ),
