@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { useEditorStore } from '../store'
+import { effectiveNodeProps } from '../lib/designSystem'
 import type { CanvasNode, NodeProps, ProjectComponentDefinition } from '../types'
 
 const viewportWidths = {
@@ -43,7 +44,14 @@ function nodeStyle(node: CanvasNode, preview?: SizePreview | null): CSSPropertie
     paddingBottom: p.paddingBottom ?? p.padding,
     paddingLeft: p.paddingLeft ?? p.padding,
 
-    background: p.background,
+    background:
+      p.fillType === 'linear-gradient'
+        ? undefined
+        : p.background,
+    backgroundImage:
+      p.fillType === 'linear-gradient' && p.gradientFrom && p.gradientTo
+        ? `linear-gradient(${p.gradientAngle ?? 90}deg, ${p.gradientFrom}, ${p.gradientTo})`
+        : undefined,
     color: p.color,
     opacity: p.opacity,
 
@@ -233,6 +241,9 @@ function CanvasItem({ id }: { id: string }) {
   const selectedIds = useEditorStore((state) => state.selectedIds)
   const selectNode = useEditorStore((state) => state.selectNode)
   const updateNode = useEditorStore((state) => state.updateNode)
+  const updateNodeForViewport = useEditorStore((state) => state.updateNodeForViewport)
+  const viewport = useEditorStore((state) => state.viewport)
+  const designSystem = useEditorStore((state) => state.designSystem)
   const zoom = useEditorStore((state) => state.zoom)
   const projectComponents = useEditorStore((state) => state.projectComponents)
   const [previewSize, setPreviewSize] = useState<SizePreview | null>(null)
@@ -255,6 +266,12 @@ function CanvasItem({ id }: { id: string }) {
   }, [editingText])
 
   if (!node || node.visible === false) return null
+
+  const resolvedProps = effectiveNodeProps(node, viewport, designSystem)
+  const displayNode: CanvasNode = {
+    ...node,
+    props: resolvedProps,
+  }
 
   const handleClick = (event: MouseEvent) => {
     event.stopPropagation()
@@ -283,8 +300,8 @@ function CanvasItem({ id }: { id: string }) {
     const safeZoom = zoom || 1
     const startWidth = rect.width / safeZoom
     const startHeight = rect.height / safeZoom
-    const startTranslateX = node.props.translateX ?? 0
-    const startTranslateY = node.props.translateY ?? 0
+    const startTranslateX = resolvedProps.translateX ?? 0
+    const startTranslateY = resolvedProps.translateY ?? 0
     const startX = event.clientX
     const startY = event.clientY
     const aspectRatio = startWidth / Math.max(1, startHeight)
@@ -437,7 +454,7 @@ function CanvasItem({ id }: { id: string }) {
       document.body.classList.remove('is-resizing')
 
       if (Object.keys(latest).length) {
-        updateNode(id, latest)
+        updateNodeForViewport(id, viewport, latest)
       }
 
       setPreviewSize(null)
@@ -448,12 +465,12 @@ function CanvasItem({ id }: { id: string }) {
     window.addEventListener('pointerup', end, { once: true })
   }
 
-  const visualWidth = previewSize?.width ?? node.props.width
-  const visualHeight = previewSize?.height ?? node.props.height
+  const visualWidth = previewSize?.width ?? resolvedProps.width
+  const visualHeight = previewSize?.height ?? resolvedProps.height
   const intrinsicWidth = node.type === 'text' || node.type === 'button' || node.type === 'link'
 
-  const persistentX = previewSize?.translateX ?? node.props.translateX ?? 0
-  const persistentY = previewSize?.translateY ?? node.props.translateY ?? 0
+  const persistentX = previewSize?.translateX ?? resolvedProps.translateX ?? 0
+  const persistentY = previewSize?.translateY ?? resolvedProps.translateY ?? 0
   const dragTransform = transform
     ? ` translate3d(${transform.x}px, ${transform.y}px, 0)`
     : ''
@@ -462,17 +479,17 @@ function CanvasItem({ id }: { id: string }) {
     width: visualWidth === 'auto' || (!visualWidth && intrinsicWidth) ? 'fit-content' : visualWidth,
     height: visualHeight === 'auto' ? undefined : visualHeight,
     maxWidth: '100%',
-    marginTop: node.props.marginTop,
-    marginRight: node.props.marginRight,
-    marginBottom: node.props.marginBottom,
-    marginLeft: node.props.marginLeft,
+    marginTop: resolvedProps.marginTop,
+    marginRight: resolvedProps.marginRight,
+    marginBottom: resolvedProps.marginBottom,
+    marginLeft: resolvedProps.marginLeft,
     transform: `translate(${persistentX}px, ${persistentY}px)${dragTransform}`,
   }
 
   const content = (() => {
     switch (node.type) {
       case 'container':
-        return <ContainerContent node={node} preview={previewSize} />
+        return <ContainerContent node={displayNode} preview={previewSize} />
 
       case 'text':
         return editingText ? (
@@ -481,7 +498,7 @@ function CanvasItem({ id }: { id: string }) {
             className="canvas-inline-text-editor"
             contentEditable
             suppressContentEditableWarning
-            style={nodeStyle(node, previewSize)}
+            style={nodeStyle(displayNode, previewSize)}
             onBlur={(event) => {
               updateNode(id, { text: event.currentTarget.textContent ?? '' })
               setEditingText(false)
@@ -501,27 +518,27 @@ function CanvasItem({ id }: { id: string }) {
             {node.props.text}
           </div>
         ) : (
-          <div style={nodeStyle(node, previewSize)}>{node.props.text}</div>
+          <div style={nodeStyle(displayNode, previewSize)}>{node.props.text}</div>
         )
 
       case 'button':
         return (
-          <button className="canvas-button" style={nodeStyle(node, previewSize)} type="button">
+          <button className="canvas-button" style={nodeStyle(displayNode, previewSize)} type="button">
             {node.props.text}
           </button>
         )
 
       case 'input':
-        return <input className="canvas-input" style={nodeStyle(node, previewSize)} placeholder={node.props.placeholder} readOnly />
+        return <input className="canvas-input" style={nodeStyle(displayNode, previewSize)} placeholder={node.props.placeholder} readOnly />
 
       case 'textarea':
-        return <textarea className="canvas-input canvas-textarea" style={nodeStyle(node, previewSize)} placeholder={node.props.placeholder} readOnly />
+        return <textarea className="canvas-input canvas-textarea" style={nodeStyle(displayNode, previewSize)} placeholder={node.props.placeholder} readOnly />
 
       case 'link':
         return (
           <a
             className="canvas-link"
-            style={nodeStyle(node, previewSize)}
+            style={nodeStyle(displayNode, previewSize)}
             href={node.props.href ?? '#'}
             onClick={(linkEvent) => linkEvent.preventDefault()}
           >
@@ -530,14 +547,14 @@ function CanvasItem({ id }: { id: string }) {
         )
 
       case 'divider':
-        return <div className="canvas-divider" style={nodeStyle(node, previewSize)} />
+        return <div className="canvas-divider" style={nodeStyle(displayNode, previewSize)} />
 
       case 'image':
-        return <img className="canvas-image" style={nodeStyle(node, previewSize)} src={node.props.src} alt={node.props.alt ?? ''} />
+        return <img className="canvas-image" style={nodeStyle(displayNode, previewSize)} src={node.props.src} alt={node.props.alt ?? ''} />
 
       case 'component': {
         const component = projectComponents.find((item) => item.id === node.props.componentId)
-        return <ProjectComponentContent node={node} component={component} preview={previewSize} />
+        return <ProjectComponentContent node={displayNode} component={component} preview={previewSize} />
       }
     }
   })()
