@@ -10,6 +10,7 @@ export type NodeType =
   | 'component'
 
 export type Viewport = 'desktop' | 'tablet' | 'mobile'
+export type ResponsiveViewport = Exclude<Viewport, 'desktop'>
 export type PresetType = 'navbar' | 'card' | 'login-form' | 'hero'
 export type ComponentPropValue = string | number | boolean
 
@@ -29,7 +30,7 @@ export interface NodeProps {
   src?: string
   alt?: string
 
-  display?: 'block' | 'flex' | 'grid'
+  display?: 'block' | 'flex' | 'grid' | 'none'
   direction?: 'row' | 'column'
   align?: 'stretch' | 'flex-start' | 'center' | 'flex-end'
   justify?: 'flex-start' | 'center' | 'flex-end' | 'space-between' | 'space-around' | 'space-evenly'
@@ -57,8 +58,15 @@ export interface NodeProps {
   translateY?: number
 
   background?: string
+  backgroundTokenId?: string
   color?: string
+  colorTokenId?: string
   opacity?: number
+
+  fillType?: 'solid' | 'linear-gradient'
+  gradientFrom?: string
+  gradientTo?: string
+  gradientAngle?: number
 
   fontFamily?: string
   fontSize?: number
@@ -68,6 +76,7 @@ export interface NodeProps {
   textAlign?: 'left' | 'center' | 'right' | 'justify'
   textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize'
   textDecoration?: 'none' | 'underline' | 'line-through'
+  textStyleTokenId?: string
 
   radius?: number
   radiusTopLeft?: number
@@ -99,7 +108,34 @@ export interface CanvasNode {
   visible?: boolean
   locked?: boolean
   props: NodeProps
+  responsive?: Partial<Record<ResponsiveViewport, Partial<NodeProps>>>
   children: string[]
+}
+
+export interface ColorToken {
+  id: string
+  name: string
+  value: string
+}
+
+export interface TextStyleValue {
+  fontFamily?: string
+  fontSize?: number
+  fontWeight?: number
+  lineHeight?: number
+  letterSpacing?: number
+  textTransform?: NodeProps['textTransform']
+}
+
+export interface TextStyleToken {
+  id: string
+  name: string
+  value: TextStyleValue
+}
+
+export interface DesignSystem {
+  colors: ColorToken[]
+  textStyles: TextStyleToken[]
 }
 
 export interface CanvasDocument {
@@ -108,7 +144,8 @@ export interface CanvasDocument {
 }
 
 export interface CodeCanvasProject {
-  version: 2
+  version: 3
   document: CanvasDocument
   projectComponents: ProjectComponentDefinition[]
+  designSystem: DesignSystem
 }
