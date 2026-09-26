@@ -4,16 +4,24 @@ import type {
   CanvasNode,
   CodeCanvasProject,
   ComponentPropValue,
+  DesignSystem,
   NodeType,
   PresetType,
   ProjectComponentDefinition,
   Viewport,
 } from '../types'
 import { useEditorStore } from '../store'
+import { defaultDesignSystem } from '../lib/designSystem'
 
 type LegacyCodeCanvasFile = {
   version: 1
   document: CanvasDocument
+}
+
+type LegacyV2Project = {
+  version: 2
+  document: CanvasDocument
+  projectComponents: ProjectComponentDefinition[]
 }
 
 const isComponentPropValue = (value: unknown): value is ComponentPropValue =>
@@ -82,11 +90,41 @@ const isCanvasDocument = (value: unknown): value is CanvasDocument => {
   return !Object.keys(document.nodes).some(hasCycle)
 }
 
+const isDesignSystem = (value: unknown): value is DesignSystem => {
+  if (!value || typeof value !== 'object') return false
+  const designSystem = value as Partial<DesignSystem>
+
+  return (
+    Array.isArray(designSystem.colors) &&
+    designSystem.colors.every(
+      (token) =>
+        !!token &&
+        typeof token.id === 'string' &&
+        typeof token.name === 'string' &&
+        typeof token.value === 'string',
+    ) &&
+    Array.isArray(designSystem.textStyles) &&
+    designSystem.textStyles.every(
+      (token) =>
+        !!token &&
+        typeof token.id === 'string' &&
+        typeof token.name === 'string' &&
+        !!token.value &&
+        typeof token.value === 'object',
+    )
+  )
+}
+
 const isCodeCanvasProject = (value: unknown): value is CodeCanvasProject => {
   if (!value || typeof value !== 'object') return false
   const project = value as Partial<CodeCanvasProject>
 
-  if (project.version !== 2 || !isCanvasDocument(project.document) || !Array.isArray(project.projectComponents)) {
+  if (
+    project.version !== 3 ||
+    !isCanvasDocument(project.document) ||
+    !Array.isArray(project.projectComponents) ||
+    !isDesignSystem(project.designSystem)
+  ) {
     return false
   }
 
@@ -172,6 +210,7 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
   const selectedId = useEditorStore((state) => state.selectedId)
   const selectedIds = useEditorStore((state) => state.selectedIds)
   const projectComponents = useEditorStore((state) => state.projectComponents)
+  const designSystem = useEditorStore((state) => state.designSystem)
   const addNode = useEditorStore((state) => state.addNode)
   const addPreset = useEditorStore((state) => state.addPreset)
   const duplicateNode = useEditorStore((state) => state.duplicateNode)
@@ -202,9 +241,10 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
 
   const exportDocument = () => {
     const payload: CodeCanvasProject = {
-      version: 2,
+      version: 3,
       document: { nodes, rootIds },
       projectComponents,
+      designSystem,
     }
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
@@ -225,7 +265,20 @@ export function Topbar({ onOpenCode }: { onOpenCode: () => void }) {
       const parsed = JSON.parse(await file.text()) as unknown
 
       if (isCodeCanvasProject(parsed)) {
-        loadProject(parsed.document, parsed.projectComponents)
+        loadProject(parsed.document, parsed.projectComponents, parsed.designSystem)
+        return
+      }
+
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        (parsed as Partial<LegacyV2Project>).version === 2 &&
+        isCanvasDocument((parsed as Partial<LegacyV2Project>).document) &&
+        Array.isArray((parsed as Partial<LegacyV2Project>).projectComponents) &&
+        ((parsed as Partial<LegacyV2Project>).projectComponents ?? []).every(isProjectComponent)
+      ) {
+        const legacy = parsed as LegacyV2Project
+        loadProject(legacy.document, legacy.projectComponents, defaultDesignSystem)
         return
       }
 
