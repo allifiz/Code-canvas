@@ -1,5 +1,5 @@
 import { generateReactCode } from './generator'
-import type { CanvasNode, ProjectComponentDefinition } from '../types'
+import type { CanvasNode, DesignSystem, ProjectComponentDefinition } from '../types'
 
 const encoder = new TextEncoder()
 
@@ -226,17 +226,19 @@ export function downloadStandaloneProject(
   nodes: Record<string, CanvasNode>,
   rootIds: string[],
   projectComponents: ProjectComponentDefinition[],
+  designSystem: DesignSystem,
 ) {
   if (!canExportStandaloneProject(nodes)) {
     throw new Error('Standalone project export cannot include external project components yet.')
   }
 
-  const generatedPage = generateReactCode(nodes, rootIds, projectComponents)
+  const generatedPage = generateReactCode(nodes, rootIds, projectComponents, designSystem)
   const projectSnapshot = JSON.stringify(
     {
-      version: 2,
+      version: 3,
       document: { nodes, rootIds },
       projectComponents,
+      designSystem,
     },
     null,
     2,
